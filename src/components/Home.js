@@ -11,10 +11,12 @@ const Home = () => {
   const [carrinho, setCarrinho] = useState([]);
   const navigate = useNavigate();
 
+  const apiUrl = process.env.REACT_APP_API_URL;
+
   useEffect(() => {
     const buscarProdutos = async () => {
       try {
-        const resposta = await axios.get(`${process.env.REACT_APP_API_URL}/api/products`);
+        const resposta = await axios.get(`${apiUrl}/api/products`);
         setProdutos(resposta.data);
       } catch (erro) {
         console.error('Erro ao buscar produtos:', erro);
