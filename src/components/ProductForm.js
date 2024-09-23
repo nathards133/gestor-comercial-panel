@@ -5,11 +5,11 @@ const ProductForm = ({ onProductAdded }) => {
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [quantity, setQuantity] = useState('');
-
+  const apiUrl = process.env.REACT_APP_API_URL;
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('${process.env.REACT_APP_API_URL}/api/products', { name, price, quantity });
+      await axios.post(`${apiUrl}/api/products`, { name, price, quantity });
       setName('');
       setPrice('');
       setQuantity('');

@@ -36,7 +36,7 @@ const ProductList = () => {
     const [errors, setErrors] = useState({ name: '', price: '', quantity: '', barcode: '' });
     const [isScannerActive, setIsScannerActive] = useState(false);
     const [scannedBarcode, setScannedBarcode] = useState('');
-
+    const apiUrl = process.env.REACT_APP_API_URL;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -45,7 +45,7 @@ const ProductList = () => {
     }, []);
 
     const fetchProducts = async () => {
-        const res = await axios.get('${process.env.REACT_APP_API_URL}/api/products');
+        const res = await axios.get(`${apiUrl}/api/products`);
         setProducts(res.data);
     };
 
@@ -98,7 +98,7 @@ const ProductList = () => {
                     quantity: parseInt(newProduct.quantity, 10),
                     barcode: newProduct.barcode
                 };
-                await axios.post('${process.env.REACT_APP_API_URL}/api/products', productData);
+                await axios.post(`${apiUrl}/api/products`, productData);
                 setLoading(false);
                 handleCloseDialog();
                 setOpenSnackbar(true);
