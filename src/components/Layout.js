@@ -72,7 +72,7 @@ const Layout = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Mercearia Regis
+            Mercearia Régis
           </Typography>
           <Button color="inherit" onClick={handleLogout} startIcon={<ExitToApp />}>
             Sair
