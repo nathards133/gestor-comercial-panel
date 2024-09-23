@@ -35,8 +35,8 @@ const menuItems = [
   { text: 'Produtos', icon: <ShoppingCart />, path: '/products' },
   { text: 'Vendas', icon: <PointOfSale />, path: '/sales' },
   { text: 'Relatórios', icon: <Assessment />, path: '/reports' },
-  { text: 'Contas a Pagar', icon: <Payments />, path: '/contas-a-pagar' },
-  { text: 'Gestão de Estoque', icon: <Inventory />, path: '/stock' },
+//   { text: 'Contas a Pagar', icon: <Payments />, path: '/contas-a-pagar' },
+//   { text: 'Gestão de Estoque', icon: <Inventory />, path: '/stock' },
   { text: 'Fornecedores', icon: <Store />, path: '/suppliers' },
 ];
 
