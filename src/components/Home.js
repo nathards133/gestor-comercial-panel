@@ -40,7 +40,7 @@ const Home = () => {
 
   const finalizarVenda = async () => {
     try {
-      const saleResponse = await axios.post('${process.env.REACT_APP_API_URL}/api/sales', { items: carrinho });
+      const saleResponse = await axios.post(`${apiUrl}/api/sales`, { items: carrinho });
       
       // Atualizar o estoque
     //   for (let item of carrinho) {
