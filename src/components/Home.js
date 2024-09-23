@@ -14,7 +14,7 @@ const Home = () => {
   useEffect(() => {
     const buscarProdutos = async () => {
       try {
-        const resposta = await axios.get('http://localhost:5000/api/products');
+        const resposta = await axios.get(`${process.env.REACT_APP_API_URL}/api/products`);
         setProdutos(resposta.data);
       } catch (erro) {
         console.error('Erro ao buscar produtos:', erro);
@@ -38,11 +38,11 @@ const Home = () => {
 
   const finalizarVenda = async () => {
     try {
-      const saleResponse = await axios.post('http://localhost:5000/api/sales', { items: carrinho });
+      const saleResponse = await axios.post('${process.env.REACT_APP_API_URL}/api/sales', { items: carrinho });
       
       // Atualizar o estoque
     //   for (let item of carrinho) {
-    //     await axios.post('http://localhost:5000/api/stock/remove', {
+    //     await axios.post('${process.env.REACT_APP_API_URL}/api/stock/remove', {
     //       productId: item._id,
     //       quantity: item.quantidade
     //     });

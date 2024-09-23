@@ -17,17 +17,17 @@ const StockManagement = () => {
   }, []);
 
   const fetchProducts = async () => {
-    const response = await axios.get('http://localhost:5000/api/products');
+    const response = await axios.get('${process.env.REACT_APP_API_URL}/api/products');
     setProducts(response.data);
   };
 
   const checkLowStock = async () => {
-    const response = await axios.get('http://localhost:5000/api/stock/low-stock');
+    const response = await axios.get('${process.env.REACT_APP_API_URL}/api/stock/low-stock');
     setLowStockProducts(response.data);
   };
 
   const handleAddStock = async () => {
-    await axios.post('http://localhost:5000/api/stock/add', {
+    await axios.post('${process.env.REACT_APP_API_URL}/api/stock/add', {
       productId: selectedProduct,
       quantity: Number(quantity)
     });
@@ -36,7 +36,7 @@ const StockManagement = () => {
   };
 
   const handleRemoveStock = async () => {
-    await axios.post('http://localhost:5000/api/stock/remove', {
+    await axios.post('${process.env.REACT_APP_API_URL}/api/stock/remove', {
       productId: selectedProduct,
       quantity: Number(quantity)
     });

@@ -38,7 +38,7 @@ const SalesPage = () => {
     const fetchSales = async () => {
         try {
             const period = ['day', 'week', 'year'][tabValue];
-            const response = await axios.get(`http://localhost:5000/api/sales/${period}`);
+            const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sales/${period}`);
             setSales(response.data);
         } catch (error) {
             console.error('Erro ao buscar vendas:', error);
@@ -47,7 +47,7 @@ const SalesPage = () => {
 
     const fetchStats = async () => {
         try {
-            const response = await axios.get('http://localhost:5000/api/sales/stats');
+            const response = await axios.get('${process.env.REACT_APP_API_URL}/api/sales/stats');
             setStats(response.data);
         } catch (error) {
             console.error('Erro ao buscar estatísticas:', error);

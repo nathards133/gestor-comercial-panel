@@ -29,7 +29,7 @@ const ReportsPage = () => {
 
     const handleExportReport = async () => {
         try {
-            const response = await axios.get(`http://localhost:5000/api/reports/export`, {
+            const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/reports/export`, {
                 params: { type: reportType, period: period },
                 responseType: 'blob', // Important for file download
             });

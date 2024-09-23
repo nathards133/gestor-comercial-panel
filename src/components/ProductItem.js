@@ -9,7 +9,7 @@ const ProductItem = ({ product, onProductUpdated }) => {
 
   const handleUpdate = async () => {
     try {
-      await axios.put(`http://localhost:5000/api/products/${product._id}`, {
+      await axios.put(`${process.env.REACT_APP_API_URL}/api/products/${product._id}`, {
         name,
         price,
         quantity
@@ -23,7 +23,7 @@ const ProductItem = ({ product, onProductUpdated }) => {
 
   const handleDelete = async () => {
     try {
-      await axios.delete(`http://localhost:5000/api/products/${product._id}`);
+      await axios.delete(`${process.env.REACT_APP_API_URL}/api/products/${product._id}`);
       onProductUpdated();
     } catch (error) {
       console.error('Erro ao excluir produto:', error);
