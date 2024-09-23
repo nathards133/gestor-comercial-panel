@@ -6,6 +6,7 @@ const ProductForm = ({ onProductAdded }) => {
   const [price, setPrice] = useState('');
   const [quantity, setQuantity] = useState('');
   const apiUrl = process.env.REACT_APP_API_URL;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
