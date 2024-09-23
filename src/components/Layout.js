@@ -12,7 +12,8 @@ import {
   IconButton, 
   Button,
   useMediaQuery,
-  useTheme
+  useTheme,
+  ListItemButton
 } from '@mui/material';
 import { 
   Home, 
@@ -41,7 +42,7 @@ const menuItems = [
 ];
 
 const Layout = () => {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -72,7 +73,7 @@ const Layout = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Mercearia Régis
+            Bem vindo, {user?.company}
           </Typography>
           <Button color="inherit" onClick={handleLogout} startIcon={<ExitToApp />}>
             Sair
@@ -100,8 +101,7 @@ const Layout = () => {
           <List>
             {menuItems.map((item) => (
               <ListItem 
-                button 
-                key={item.text} 
+                key={item.path}  // Adicione esta linha
                 component={Link} 
                 to={item.path}
                 sx={{ 
@@ -109,19 +109,27 @@ const Layout = () => {
                   px: 2.5,
                 }}
               >
-                <ListItemIcon
+                <ListItemButton
                   sx={{
-                    minWidth: 0,
-                    mr: open ? 3 : 'auto',
-                    justifyContent: 'center',
+                    minHeight: 48,
+                    justifyContent: open ? 'initial' : 'center',
+                    px: 2.5,
                   }}
                 >
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText 
-                  primary={item.text} 
-                  sx={{ opacity: open ? 1 : 0 }} 
-                />
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 0,
+                      mr: open ? 3 : 'auto',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={item.text} 
+                    sx={{ opacity: open ? 1 : 0 }} 
+                  />
+                </ListItemButton>
               </ListItem>
             ))}
           </List>

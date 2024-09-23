@@ -26,6 +26,8 @@ import {
     useTheme
 } from '@mui/material';
 import { NumericFormat } from 'react-number-format';
+import ProductImport from './ProductImport';
+import { useAuth } from '../contexts/AuthContext';
 
 const ProductList = () => {
     const [products, setProducts] = useState([]);
@@ -39,6 +41,7 @@ const ProductList = () => {
     const apiUrl = process.env.REACT_APP_API_URL;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const { user } = useAuth();
 
     useEffect(() => {
         fetchProducts();
@@ -129,6 +132,10 @@ const ProductList = () => {
     const handleError = (err) => {
         console.error(err);
     }
+
+    const handleImportComplete = () => {
+        fetchProducts();
+    };
 
     return (
         <Box sx={{ p: 2 }}>
@@ -256,6 +263,9 @@ const ProductList = () => {
                     Produto salvo com sucesso!
                 </Alert>
             </Snackbar>
+
+            {!user.role === 'admin' && <ProductImport onImportComplete={handleImportComplete} />}
+
         </Box>
     );
 };

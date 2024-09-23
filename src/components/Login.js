@@ -1,21 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { TextField, Button, Box, Typography } from '@mui/material';
 
 const Login = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('email');
+    if (savedEmail) {
+      setEmail(savedEmail);
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const success = await login(username, password);
-    if (success) {
-      navigate('/');
-    } else {
-      alert('Falha no login. Verifique suas credenciais.');
+    if (email && password) {
+      const success = await login(email, password);
+      if (success) {
+        navigate('/');
+      } else {
+        alert('Falha no login. Verifique suas credenciais.');
+      }
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && email && password) {
+      handleSubmit(e);
     }
   };
 
@@ -29,13 +44,14 @@ const Login = () => {
           margin="normal"
           required
           fullWidth
-          id="username"
-          label="Nome de usuário"
-          name="username"
-          autoComplete="username"
+          id="email"
+          label="Email"
+          name="email"
+          autoComplete="email"
           autoFocus
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onKeyPress={handleKeyPress}
         />
         <TextField
           margin="normal"
@@ -48,12 +64,14 @@ const Login = () => {
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onKeyPress={handleKeyPress}
         />
         <Button
           type="submit"
           fullWidth
           variant="contained"
           sx={{ mt: 3, mb: 2 }}
+          disabled={!email || !password}
         >
           Entrar
         </Button>

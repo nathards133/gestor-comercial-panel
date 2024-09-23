@@ -10,21 +10,24 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
+    const email = localStorage.getItem('email');
+    const company = localStorage.getItem('company');
+    if (token && email && company) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser({ token });
+      setUser({ token, email, company });
     }
     setLoading(false);
   }, []);
 
-  const login = async (username, password) => {
+  const login = async (email, password) => {
     try {
-      console.log(`${apiUrl}/api/auth/login`);
-      const response = await axios.post(`${apiUrl}/api/auth/login`, { username, password });
-      const { token, userId } = response.data;
+      const response = await axios.post(`${apiUrl}/api/auth/login`, { email, password });
+      const { token, userId, role, company } = response.data;
       localStorage.setItem('token', token);
+      localStorage.setItem('email', email);
+      localStorage.setItem('company', company);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser({ token, userId });
+      setUser({ token, userId, role, company, email });
       return true;
     } catch (error) {
       console.error('Erro no login:', error);
@@ -34,6 +37,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('company');
     delete axios.defaults.headers.common['Authorization'];
     setUser(null);
   };
