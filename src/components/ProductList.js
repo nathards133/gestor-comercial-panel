@@ -48,8 +48,18 @@ const ProductList = () => {
     }, []);
 
     const fetchProducts = async () => {
-        const res = await axios.get(`${apiUrl}/api/products`);
-        setProducts(res.data);
+        try {
+            const res = await axios.get(`${apiUrl}/api/products`);
+            if (Array.isArray(res.data)) {
+                setProducts(res.data);
+            } else {
+                console.error('A resposta da API não é um array:', res.data);
+                setProducts([]);
+            }
+        } catch (error) {
+            console.error('Erro ao buscar produtos:', error);
+            setProducts([]);
+        }
     };
 
     const handleOpenDialog = () => {
@@ -159,7 +169,7 @@ const ProductList = () => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {products.map((product) => (
+                        {Array.isArray(products) && products.map((product) => (
                             <TableRow key={product._id}>
                                 <TableCell component="th" scope="row">
                                     {product.name}
