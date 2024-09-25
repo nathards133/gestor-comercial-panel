@@ -17,8 +17,13 @@ const StockManagement = () => {
   }, []);
 
   const fetchProducts = async () => {
-    const response = await axios.get('${process.env.REACT_APP_API_URL}/api/products');
-    setProducts(response.data);
+    try {
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/products`);
+      setProducts(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Erro ao buscar produtos:', error);
+      setProducts([]);
+    }
   };
 
   const checkLowStock = async () => {
@@ -93,15 +98,21 @@ const StockManagement = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {products.map((product) => (
-              <TableRow key={product._id}>
-                <TableCell component="th" scope="row">
-                  {product.name}
-                </TableCell>
-                <TableCell align="right">{product.quantity}</TableCell>
-                <TableCell align="right">{product.minStockLevel}</TableCell>
+            {products.length > 0 ? (
+              products.map((product) => (
+                <TableRow key={product._id}>
+                  <TableCell component="th" scope="row">
+                    {product.name}
+                  </TableCell>
+                  <TableCell align="right">{product.quantity}</TableCell>
+                  <TableCell align="right">{product.minStockLevel}</TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={3}>Nenhum produto encontrado</TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
       </TableContainer>

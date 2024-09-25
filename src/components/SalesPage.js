@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {
     Box,
@@ -24,8 +24,11 @@ import {
 
 const SalesPage = () => {
     const [sales, setSales] = useState([]);
+    const [stats, setStats] = useState(() => {
+        const cachedStats = localStorage.getItem('salesStats');
+        return cachedStats ? JSON.parse(cachedStats) : { sales: [], totalSales: 0 };
+    });
     const [tabValue, setTabValue] = useState(0);
-    const [stats, setStats] = useState({ productStats: [], totalSales: {} });
     const [cachedData, setCachedData] = useState({});
     const [lastStatsFetch, setLastStatsFetch] = useState(null);
     const [periodInfo, setPeriodInfo] = useState(null);
@@ -49,9 +52,12 @@ const SalesPage = () => {
             const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sales/${period}?page=${page}`);
             console.log('API Response:', response.data); // Log da resposta da API
             const newSales = Array.isArray(response.data.sales) ? response.data.sales : [];
-            setSales(newSales); // Alterado para substituir as vendas em vez de adicionar
+            setSales(prevSales => page === 1 ? newSales : [...prevSales, ...newSales]);
             setPeriodInfo(response.data.period || null);
-            setPagination(response.data.pagination || { currentPage: page, totalPages: page });
+            setPagination({
+                currentPage: response.data.currentPage || page,
+                totalPages: response.data.totalPages || page
+            });
             setCachedData(prev => ({ 
                 ...prev, 
                 [cacheKey]: { 
@@ -62,6 +68,7 @@ const SalesPage = () => {
             }));
         } catch (error) {
             console.error('Erro ao buscar vendas:', error);
+            setSales([]);  // Definir como array vazio em caso de erro
         } finally {
             setLoading(false);
         }
@@ -69,19 +76,22 @@ const SalesPage = () => {
 
     const fetchStats = useCallback(async () => {
         const now = new Date();
-        if (lastStatsFetch && (now - lastStatsFetch) < 5 * 60 * 1000) {
-            // Se a última busca foi há menos de 5 minutos, não busca novamente
-            return;
+        const lastFetch = localStorage.getItem('lastStatsFetch');
+        if (lastFetch && (now - new Date(lastFetch)) < 5 * 60 * 1000) {
+            return; // Se a última busca foi há menos de 5 minutos, não busca novamente
         }
 
         try {
             const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sales/stats/daily`);
+            console.log('Estatísticas recebidas:', response.data);
             setStats(response.data);
-            setLastStatsFetch(now);
+            setSales(response.data.sales || []);
+            localStorage.setItem('salesStats', JSON.stringify(response.data));
+            localStorage.setItem('lastStatsFetch', now.toISOString());
         } catch (error) {
             console.error('Erro ao buscar estatísticas:', error);
         }
-    }, [lastStatsFetch]);
+    }, []);
 
     useEffect(() => {
         const periods = ['day', 'week', 'month'];
@@ -91,10 +101,27 @@ const SalesPage = () => {
 
     useEffect(() => {
         fetchStats();
-        // Configura um intervalo para buscar as estatísticas a cada 5 minutos
         const interval = setInterval(fetchStats, 5 * 60 * 1000);
         return () => clearInterval(interval);
     }, [fetchStats]);
+
+    const totalSalesValue = useMemo(() => {
+        return sales.reduce((total, sale) => total + (sale.totalValue || 0), 0);
+    }, [sales]);
+
+    const totalSalesCount = useMemo(() => {
+        return stats.totalSales || 0;
+    }, [stats.totalSales]);
+
+    const topSellingProduct = useMemo(() => {
+        const productCounts = sales.flatMap(sale => sale.items)
+            .reduce((counts, item) => {
+                counts[item.product.name] = (counts[item.product.name] || 0) + item.quantity;
+                return counts;
+            }, {});
+        const topProduct = Object.entries(productCounts).sort((a, b) => b[1] - a[1])[0];
+        return topProduct ? topProduct[0] : 'N/A';
+    }, [sales]);
 
     const handleTabChange = (event, newValue) => {
         setTabValue(newValue);
@@ -116,7 +143,9 @@ const SalesPage = () => {
                     <Card sx={{ bgcolor: '#e3f2fd', height: '100%' }}>
                         <CardContent>
                             <Typography variant={isMobile ? "subtitle1" : "h6"}>Total de Vendas</Typography>
-                            <Typography variant={isMobile ? "h5" : "h4"}>R$ {stats.totalSales?.totalValue?.toFixed(2) || '0.00'}</Typography>
+                            <Typography variant={isMobile ? "h5" : "h4"}>
+                                R$ {totalSalesValue.toFixed(2)}
+                            </Typography>
                         </CardContent>
                     </Card>
                 </Grid>
@@ -124,7 +153,9 @@ const SalesPage = () => {
                     <Card sx={{ bgcolor: '#e8f5e9' }}>
                         <CardContent>
                             <Typography variant="h6">Número de Vendas</Typography>
-                            <Typography variant="h4">{stats.totalSales?.count || 0}</Typography>
+                            <Typography variant="h4">
+                                {totalSalesCount}
+                            </Typography>
                         </CardContent>
                     </Card>
                 </Grid>
@@ -132,7 +163,9 @@ const SalesPage = () => {
                     <Card sx={{ bgcolor: '#fff3e0' }}>
                         <CardContent>
                             <Typography variant="h6">Produto Mais Vendido</Typography>
-                            <Typography variant="h4">{stats.productStats[0]?.name || 'N/A'}</Typography>
+                            <Typography variant="h4">
+                                {topSellingProduct}
+                            </Typography>
                         </CardContent>
                     </Card>
                 </Grid>
@@ -165,19 +198,25 @@ const SalesPage = () => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {sales.map((sale) => (
-                            <TableRow key={sale._id}>
-                                <TableCell>{new Date(sale.createdAt).toLocaleString()}</TableCell>
-                                <TableCell>
-                                    {sale.items.map(item => (
-                                        <div key={item._id}>
-                                            {item.product.name} - {item.quantity}x R$ {item.price.toFixed(2)}
-                                        </div>
-                                    ))}
-                                </TableCell>
-                                <TableCell align="right">R$ {sale.totalValue.toFixed(2)}</TableCell>
+                        {sales && sales.length > 0 ? (
+                            sales.map((sale) => (
+                                <TableRow key={sale._id}>
+                                    <TableCell>{new Date(sale.createdAt).toLocaleString()}</TableCell>
+                                    <TableCell>
+                                        {sale.items && sale.items.map(item => (
+                                            <div key={item._id}>
+                                                {item.product?.name || 'Produto desconhecido'} - {item.quantity}x R$ {item.price?.toFixed(2) || '0.00'}
+                                            </div>
+                                        ))}
+                                    </TableCell>
+                                    <TableCell align="right">R$ {sale.totalValue?.toFixed(2) || '0.00'}</TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={3} align="center">Nenhuma venda encontrada</TableCell>
                             </TableRow>
-                        ))}
+                        )}
                     </TableBody>
                 </Table>
             </TableContainer>
@@ -205,13 +244,19 @@ const SalesPage = () => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {stats.productStats.map((stat) => (
+                    {stats.productStats && stats.productStats.length > 0 ? (
+                        stats.productStats.map((stat) => (
                             <TableRow key={stat._id}>
                                 <TableCell>{stat.name}</TableCell>
                                 <TableCell align="right">{stat.totalQuantity}</TableCell>
-                                <TableCell align="right">R$ {stat.totalValue.toFixed(2)}</TableCell>
+                                <TableCell align="right">R$ {stat.totalValue?.toFixed(2) || '0.00'}</TableCell>
                             </TableRow>
-                        ))}
+                        ))
+                    ) : (
+                        <TableRow>
+                            <TableCell colSpan={3} align="center">Nenhuma estatística de produto disponível</TableCell>
+                        </TableRow>
+                    )}
                     </TableBody>
                 </Table>
             </TableContainer>

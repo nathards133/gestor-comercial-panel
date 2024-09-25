@@ -31,6 +31,11 @@ import { useAuth } from '../contexts/AuthContext';
 
 const ProductList = () => {
     const [products, setProducts] = useState([]);
+    const [pagination, setPagination] = useState({
+        currentPage: 1,
+        totalPages: 1,
+        totalItems: 0
+    });
     const [openDialog, setOpenDialog] = useState(false);
     const [loading, setLoading] = useState(false);
     const [openSnackbar, setOpenSnackbar] = useState(false);
@@ -50,10 +55,15 @@ const ProductList = () => {
     const fetchProducts = async () => {
         try {
             const res = await axios.get(`${apiUrl}/api/products`);
-            if (Array.isArray(res.data)) {
-                setProducts(res.data);
+            if (res.data && Array.isArray(res.data.products)) {
+                setProducts(res.data.products);
+                setPagination({
+                    currentPage: res.data.currentPage,
+                    totalPages: res.data.totalPages,
+                    totalItems: res.data.totalItems
+                });
             } else {
-                console.error('A resposta da API não é um array:', res.data);
+                console.error('A resposta da API não contém um array de produtos:', res.data);
                 setProducts([]);
             }
         } catch (error) {
@@ -169,7 +179,7 @@ const ProductList = () => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {Array.isArray(products) && products.map((product) => (
+                        {products.map((product) => (
                             <TableRow key={product._id}>
                                 <TableCell component="th" scope="row">
                                     {product.name}

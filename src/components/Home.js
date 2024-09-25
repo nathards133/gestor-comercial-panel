@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Typography, TextField, Button, Grid, Paper, List, ListItem, ListItemText, IconButton, Autocomplete } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import axios from 'axios';
@@ -14,7 +14,6 @@ const Home = () => {
     const quantidadeInputRef = useRef(null);
     const finalizarVendaButtonRef = useRef(null);
     const [inputValue, setInputValue] = useState('');
-    const [filteredOptions, setFilteredOptions] = useState([]);
 
     const apiUrl = process.env.REACT_APP_API_URL;
 
@@ -22,31 +21,32 @@ const Home = () => {
         const buscarProdutos = async () => {
             try {
                 const resposta = await axios.get(`${apiUrl}/api/products`);
-                setProdutos(resposta.data);
+                setProdutos(Array.isArray(resposta.data.products) ? resposta.data.products : []);
             } catch (erro) {
                 console.error('Erro ao buscar produtos:', erro);
+                setProdutos([]);
             }
         };
         buscarProdutos();
 
-        // Foca no input de produto após o componente ser montado
         if (produtoInputRef.current) {
             produtoInputRef.current.focus();
         }
-    }, []);
+    }, [apiUrl]);
 
-    const adicionarAoCarrinho = () => {
+    const adicionarAoCarrinho = useCallback(() => {
         if (produtoSelecionado) {
-            setCarrinho([...carrinho, { ...produtoSelecionado, quantidade }]);
+            setCarrinho(prevCarrinho => [...prevCarrinho, { ...produtoSelecionado, quantidade }]);
             setProdutoSelecionado(null);
             setQuantidade(1);
+            setInputValue('');
             if (produtoInputRef.current) {
                 produtoInputRef.current.focus();
             }
         }
-    };
+    }, [produtoSelecionado, quantidade]);
 
-    const handleKeyDown = (e) => {
+    const handleKeyDown = useCallback((e) => {
         if (e.key === 'Enter') {
             if (produtoSelecionado && e.target === quantidadeInputRef.current) {
                 adicionarAoCarrinho();
@@ -57,54 +57,35 @@ const Home = () => {
             } else if (e.target === finalizarVendaButtonRef.current) {
                 finalizarVenda();
             }
-        } else if (e.key === 'Tab' && e.target === produtoInputRef.current) {
-            e.preventDefault();
-            if (filteredOptions.length > 0 && !produtoSelecionado) {
-                setProdutoSelecionado(filteredOptions[0]);
-                setInputValue(filteredOptions[0].name);
-                if (quantidadeInputRef.current) {
-                    quantidadeInputRef.current.focus();
-                }
-            }
         }
-    };
+    }, [produtoSelecionado, adicionarAoCarrinho]);
 
-    const removerDoCarrinho = (index) => {
-        const novoCarrinho = carrinho.filter((_, i) => i !== index);
-        setCarrinho(novoCarrinho);
-    };
+    const removerDoCarrinho = useCallback((index) => {
+        setCarrinho(prevCarrinho => prevCarrinho.filter((_, i) => i !== index));
+    }, []);
 
-    const finalizarVenda = async () => {
+    const finalizarVenda = useCallback(async () => {
         try {
-            const saleResponse = await axios.post(`${apiUrl}/api/sales`, { items: carrinho });
-
-            // Atualizar o estoque
-            //   for (let item of carrinho) {
-            //     await axios.post('${process.env.REACT_APP_API_URL}/api/stock/remove', {
-            //       productId: item._id,
-            //       quantity: item.quantidade
-            //     });
-            //   }
-
+            await axios.post(`${apiUrl}/api/sales`, { items: carrinho });
             setCarrinho([]);
-            // Remova a linha abaixo para não navegar para a página de vendas
-            // navigate('/sales');
-
-            // Foque novamente no campo de produto após finalizar a venda
             if (produtoInputRef.current) {
                 produtoInputRef.current.focus();
             }
         } catch (error) {
             console.error('Erro ao finalizar venda:', error);
         }
-    };
+    }, [carrinho, apiUrl]);
 
-    const filterOptions = (options, { inputValue }) => {
-        const filtered = options.filter(option =>
-            option.name.toLowerCase().includes(inputValue.toLowerCase())
-        );
-        return filtered;
-    };
+    const handleAutocompleteChange = useCallback((event, newValue) => {
+        setProdutoSelecionado(newValue);
+        if (newValue && quantidadeInputRef.current) {
+            quantidadeInputRef.current.focus();
+        }
+    }, []);
+
+    const handleInputChange = useCallback((event, newInputValue) => {
+        setInputValue(newInputValue);
+    }, []);
 
     return (
         <Grid container spacing={3}>
@@ -127,19 +108,10 @@ const Home = () => {
                             />
                         )}
                         value={produtoSelecionado}
-                        onChange={(event, newValue) => {
-                            setProdutoSelecionado(newValue);
-                            if (newValue && quantidadeInputRef.current) {
-                                quantidadeInputRef.current.focus();
-                            }
-                        }}
+                        onChange={handleAutocompleteChange}
                         inputValue={inputValue}
-                        onInputChange={(event, newInputValue) => {
-                            setInputValue(newInputValue);
-                            const filtered = filterOptions(produtos, { inputValue: newInputValue });
-                            setFilteredOptions(filtered);
-                        }}
-                        filterOptions={(options, state) => filteredOptions}
+                        onInputChange={handleInputChange}
+                        isOptionEqualToValue={(option, value) => option._id === value._id}
                         fullWidth
                         freeSolo
                         selectOnFocus
