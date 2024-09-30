@@ -157,10 +157,25 @@ const ProductList = () => {
         fetchProducts();
     };
 
+    const getUnitLabel = () => {
+        switch (user.businessType) {
+            case 'Padaria':
+            case 'Mercearia':
+                return 'Kg';
+            case 'Papelaria':
+            case 'Material de Construção':
+                return 'Unidade';
+            case 'Açougue':
+                return 'Kg';
+            default:
+                return 'Unidade';
+        }
+    };
+
     return (
         <Box sx={{ p: 2 }}>
             <Typography variant={isMobile ? "h5" : "h4"} align="center" gutterBottom>
-                Lista de Produtos
+                Lista de Produtos - {user.businessType}
             </Typography>
 
             <Box display="flex" justifyContent="flex-end" mb={2}>
@@ -175,7 +190,7 @@ const ProductList = () => {
                         <TableRow>
                             <TableCell>Nome</TableCell>
                             <TableCell align="right">Preço</TableCell>
-                            <TableCell align="right">Quantidade</TableCell>
+                            <TableCell align="right">Quantidade ({getUnitLabel()})</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>

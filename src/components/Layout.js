@@ -73,7 +73,7 @@ const Layout = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Bem vindo, {user?.company}
+            Bem vindo, {user?.company} - {user?.businessType}
           </Typography>
           <Button color="inherit" onClick={handleLogout} startIcon={<ExitToApp />}>
             Sair

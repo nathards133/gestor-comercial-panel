@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { TextField, Button, Box, Typography } from '@mui/material';
+import { TextField, Button, Box, Typography, Alert } from '@mui/material';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const { login, user } = useAuth();
   const navigate = useNavigate();
 
@@ -18,12 +19,13 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     if (email && password) {
       const success = await login(email, password);
       if (success) {
         navigate('/');
       } else {
-        alert('Falha no login. Verifique suas credenciais.');
+        setError('Falha no login. Verifique suas credenciais.');
       }
     }
   };
@@ -75,7 +77,15 @@ const Login = () => {
         >
           Entrar
         </Button>
+        {error && <Alert severity="error">{error}</Alert>}
       </Box>
+      {user && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="body1">
+            Bem-vindo, {user.company} - {user.businessType}
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 };
