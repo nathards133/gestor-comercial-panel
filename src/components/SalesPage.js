@@ -21,6 +21,8 @@ import {
     Button,
     CircularProgress
 } from '@mui/material';
+import WarningMessage from './WarningMessage';
+import PaymentNotificationList from './PaymentNotificationList';
 
 const SalesPage = () => {
     const [sales, setSales] = useState([]);
@@ -34,6 +36,7 @@ const SalesPage = () => {
     const [periodInfo, setPeriodInfo] = useState(null);
     const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1 });
     const [loading, setLoading] = useState(false);
+    const [notifications, setNotifications] = useState([]);
 
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -50,7 +53,7 @@ const SalesPage = () => {
         setLoading(true);
         try {
             const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sales/${period}?page=${page}`);
-            console.log('API Response:', response.data); // Log da resposta da API
+            console.log('API Response:', response.data);
             const newSales = Array.isArray(response.data.sales) ? response.data.sales : [];
             setSales(prevSales => page === 1 ? newSales : [...prevSales, ...newSales]);
             setPeriodInfo(response.data.period || null);
@@ -63,12 +66,13 @@ const SalesPage = () => {
                 [cacheKey]: { 
                     sales: newSales, 
                     period: response.data.period || null,
-                    pagination: response.data.pagination || { currentPage: page, totalPages: page }
+                    pagination: response.data.pagination || { currentPage: page, totalPages: page },
+                    isNewUser: response.data.isNewUser
                 } 
             }));
         } catch (error) {
             console.error('Erro ao buscar vendas:', error);
-            setSales([]);  // Definir como array vazio em caso de erro
+            setSales([]);
         } finally {
             setLoading(false);
         }
@@ -105,6 +109,24 @@ const SalesPage = () => {
         return () => clearInterval(interval);
     }, [fetchStats]);
 
+    useEffect(() => {
+        // Função para buscar notificações
+        const fetchNotifications = async () => {
+            try {
+                const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/payments/notifications`);
+                setNotifications(response.data);
+            } catch (error) {
+                console.error('Erro ao buscar notificações:', error);
+            }
+        };
+
+        fetchNotifications();
+        // Atualiza as notificações a cada 5 minutos
+        const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
+
+        return () => clearInterval(interval);
+    }, []);
+
     const totalSalesValue = useMemo(() => {
         return sales.reduce((total, sale) => total + (sale.totalValue || 0), 0);
     }, [sales]);
@@ -114,11 +136,19 @@ const SalesPage = () => {
     }, [stats.totalSales]);
 
     const topSellingProduct = useMemo(() => {
-        const productCounts = sales.flatMap(sale => sale.items)
-            .reduce((counts, item) => {
-                counts[item.product.name] = (counts[item.product.name] || 0) + item.quantity;
-                return counts;
-            }, {});
+        const productCounts = sales.flatMap(sale => {
+            if (!sale.items || sale.items.length === 0) {
+                return [{ product: { name: 'Venda Direta' }, quantity: 1 }];
+            }
+            return sale.items.map(item => ({
+                product: item.product || { name: 'Venda Direta' },
+                quantity: item.quantity || 1
+            }));
+        }).reduce((counts, item) => {
+            const productName = item.product.name || 'Venda Direta';
+            counts[productName] = (counts[productName] || 0) + item.quantity;
+            return counts;
+        }, {});
         const topProduct = Object.entries(productCounts).sort((a, b) => b[1] - a[1])[0];
         return topProduct ? topProduct[0] : 'N/A';
     }, [sales]);
@@ -132,11 +162,54 @@ const SalesPage = () => {
         fetchSales(periods[tabValue], (pagination?.currentPage || 0) + 1);
     };
 
+    const renderPeriodWarning = () => {
+        if (sales.length === 0) {
+            const periods = ['dia', 'semana', 'mês'];
+            return (
+                <WarningMessage 
+                    title={`Dados de ${periods[tabValue]} Indisponíveis`}
+                    message={`Não há vendas registradas no último ${periods[tabValue]}.`}
+                    severity="info"
+                />
+            );
+        }
+        return null;
+    };
+
+    const renderNewUserWarning = () => {
+        if (periodInfo && periodInfo.isNewUser) {
+            if (tabValue === 2) { // Mês
+                return (
+                    <WarningMessage 
+                        title="Novo Usuário - Dados Mensais"
+                        message="Como você é um novo usuário, os dados mensais mostram todas as suas vendas desde o início do uso do sistema."
+                        severity="info"
+                    />
+                );
+            }
+        }
+        return null;
+    };
+
+    const renderSaleItems = (sale) => {
+        if (sale.items && sale.items.length > 0) {
+            return sale.items.map(item => (
+                <div key={item._id || Math.random()}>
+                    {item.product?.name || 'Venda Direta'} - {item.quantity || 1}x R$ {item.price?.toFixed(2) || '0.00'}
+                </div>
+            ));
+        } else {
+            return <div>Venda Direta - 1x R$ {sale.totalValue?.toFixed(2) || '0.00'}</div>;
+        }
+    };
+
     return (
         <Box sx={{ p: 2 }}>
             <Typography variant={isMobile ? "h5" : "h4"} gutterBottom>
                 Vendas
             </Typography>
+
+            <PaymentNotificationList notifications={notifications} />
 
             <Grid container spacing={2} sx={{ mb: 3 }}>
                 <Grid item xs={12} sm={4}>
@@ -179,14 +252,11 @@ const SalesPage = () => {
             >
                 <Tab label="Dia" />
                 <Tab label="Semana" />
-                {!periodInfo?.isNewUser && <Tab label="Últimos 3 Meses" />}
+                <Tab label="Mês" />
             </Tabs>
 
-            {periodInfo && periodInfo.isNewUser && (
-                <Alert severity="info" sx={{ mt: 2 }}>
-                    Você é um novo usuário! Os dados mostrados são desde o início do seu uso do sistema.
-                </Alert>
-            )}
+            {renderPeriodWarning()}
+            {renderNewUserWarning()}
 
             <TableContainer component={Paper} sx={{ mt: 2, overflowX: 'auto' }}>
                 <Table size={isMobile ? "small" : "medium"}>
@@ -195,6 +265,7 @@ const SalesPage = () => {
                             <TableCell>Data</TableCell>
                             <TableCell>Produtos</TableCell>
                             <TableCell align="right">Valor Total</TableCell>
+                            <TableCell>Método de Pagamento</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -202,19 +273,14 @@ const SalesPage = () => {
                             sales.map((sale) => (
                                 <TableRow key={sale._id}>
                                     <TableCell>{new Date(sale.createdAt).toLocaleString()}</TableCell>
-                                    <TableCell>
-                                        {sale.items && sale.items.map(item => (
-                                            <div key={item._id}>
-                                                {item.product?.name || 'Produto desconhecido'} - {item.quantity}x R$ {item.price?.toFixed(2) || '0.00'}
-                                            </div>
-                                        ))}
-                                    </TableCell>
+                                    <TableCell>{renderSaleItems(sale)}</TableCell>
                                     <TableCell align="right">R$ {sale.totalValue?.toFixed(2) || '0.00'}</TableCell>
+                                    <TableCell>{sale.paymentMethod || 'Não especificado'}</TableCell>
                                 </TableRow>
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={3} align="center">Nenhuma venda encontrada</TableCell>
+                                <TableCell colSpan={4} align="center">Nenhuma venda encontrada</TableCell>
                             </TableRow>
                         )}
                     </TableBody>

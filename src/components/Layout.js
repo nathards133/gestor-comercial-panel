@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Box, 
   Drawer, 
@@ -26,10 +26,15 @@ import {
   Store, 
   ExitToApp,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Settings
 } from '@mui/icons-material';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Badge, Dialog, DialogTitle, DialogContent } from '@mui/material';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import axios from 'axios';
+import PaymentNotificationList from './PaymentNotificationList';
 
 const menuItems = [
   { text: 'Caixa', icon: <Home />, path: '/' },
@@ -39,6 +44,7 @@ const menuItems = [
 //   { text: 'Contas a Pagar', icon: <Payments />, path: '/contas-a-pagar' },
 //   { text: 'Gestão de Estoque', icon: <Inventory />, path: '/stock' },
   { text: 'Fornecedores', icon: <Store />, path: '/suppliers' },
+  { text: 'Integrações', icon: <Settings />, path: '/integrations' },
 ];
 
 const Layout = () => {
@@ -47,6 +53,26 @@ const Layout = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [open, setOpen] = useState(!isMobile);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/payments/notifications`);
+        setNotifications(response.data);
+        setNotificationCount(response.data.length);
+      } catch (error) {
+        console.error('Erro ao buscar notificações:', error);
+      }
+    };
+
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000); // Atualiza a cada 30 segundos
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleDrawerToggle = () => {
     setOpen(!open);
@@ -55,6 +81,11 @@ const Layout = () => {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleNotificationClick = () => {
+    setNotificationDialogOpen(true);
+    setNotificationCount(0); // Reseta o contador ao abrir as notificações
   };
 
   const drawerWidth = open ? 240 : 60;
@@ -75,6 +106,11 @@ const Layout = () => {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Bem vindo, {user?.company} - {user?.businessType}
           </Typography>
+          <IconButton color="inherit" onClick={handleNotificationClick}>
+            <Badge badgeContent={notificationCount} color="secondary">
+              <NotificationsIcon />
+            </Badge>
+          </IconButton>
           <Button color="inherit" onClick={handleLogout} startIcon={<ExitToApp />}>
             Sair
           </Button>
@@ -140,6 +176,12 @@ const Layout = () => {
           </IconButton>
         </Box>
       </Drawer>
+      <Dialog open={notificationDialogOpen} onClose={() => setNotificationDialogOpen(false)}>
+        <DialogTitle>Notificações de Pagamento</DialogTitle>
+        <DialogContent>
+          <PaymentNotificationList notifications={notifications} />
+        </DialogContent>
+      </Dialog>
       <Box component="main" sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` } }}>
         <Toolbar />
         <Outlet />

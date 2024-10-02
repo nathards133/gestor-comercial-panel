@@ -3,27 +3,40 @@ import axios from 'axios';
 import {
   Typography, Box, TextField, Button, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle,
-  DialogContent, DialogActions, IconButton
+  DialogContent, DialogActions, IconButton, Autocomplete, Chip
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, WhatsApp as WhatsAppIcon } from '@mui/icons-material';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 const SupplierManagement = () => {
   const [suppliers, setSuppliers] = useState([]);
+  const [products, setProducts] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [currentSupplier, setCurrentSupplier] = useState({
     name: '', cnpj: '', email: '', phone: '',
-    address: { street: '', number: '', complement: '', city: '', state: '', zipCode: '' }
+    address: { street: '', number: '', complement: '', city: '', state: '', zipCode: '' },
+    suppliedProducts: []
   });
 
   useEffect(() => {
     fetchSuppliers();
+    fetchProducts();
   }, []);
 
   const fetchSuppliers = async () => {
-    const response = await axios.get(`${API_URL}/api/suppliers`);
-    setSuppliers(response.data);
+    try {
+      const response = await axios.get(`${API_URL}/api/suppliers`);
+      setSuppliers(response.data || []);
+    } catch (error) {
+      console.error('Erro ao buscar fornecedores:', error);
+      setSuppliers([]);
+    }
+  };
+
+  const fetchProducts = async () => {
+    const response = await axios.get(`${API_URL}/api/products`);
+    setProducts(response.data.products);
   };
 
   const handleInputChange = (e) => {
@@ -37,6 +50,10 @@ const SupplierManagement = () => {
     } else {
       setCurrentSupplier(prev => ({ ...prev, [name]: value }));
     }
+  };
+
+  const handleProductChange = (event, newValue) => {
+    setCurrentSupplier(prev => ({ ...prev, suppliedProducts: newValue }));
   };
 
   const handleSubmit = async (e) => {
@@ -70,6 +87,11 @@ const SupplierManagement = () => {
     }
   };
 
+  const getWhatsAppLink = (phone) => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    return `https://wa.me/${cleanPhone}`;
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>Gestão de Fornecedores</Typography>
@@ -77,7 +99,8 @@ const SupplierManagement = () => {
       <Button variant="contained" color="primary" onClick={() => {
         setCurrentSupplier({
           name: '', cnpj: '', email: '', phone: '',
-          address: { street: '', number: '', complement: '', city: '', state: '', zipCode: '' }
+          address: { street: '', number: '', complement: '', city: '', state: '', zipCode: '' },
+          suppliedProducts: []
         });
         setOpenDialog(true);
       }} sx={{ mb: 2 }}>
@@ -92,6 +115,7 @@ const SupplierManagement = () => {
               <TableCell>CNPJ</TableCell>
               <TableCell>Email</TableCell>
               <TableCell>Telefone</TableCell>
+              <TableCell>Produtos Fornecidos</TableCell>
               <TableCell>Ações</TableCell>
             </TableRow>
           </TableHead>
@@ -103,11 +127,19 @@ const SupplierManagement = () => {
                 <TableCell>{supplier.email}</TableCell>
                 <TableCell>{supplier.phone}</TableCell>
                 <TableCell>
+                  {supplier.suppliedProducts.map(product => (
+                    <Chip key={product._id} label={product.name} size="small" sx={{ m: 0.5 }} />
+                  ))}
+                </TableCell>
+                <TableCell>
                   <IconButton onClick={() => handleEdit(supplier)}>
                     <EditIcon />
                   </IconButton>
                   <IconButton onClick={() => handleDelete(supplier._id)}>
                     <DeleteIcon />
+                  </IconButton>
+                  <IconButton href={getWhatsAppLink(supplier.phone)} target="_blank">
+                    <WhatsAppIcon />
                   </IconButton>
                 </TableCell>
               </TableRow>
@@ -150,6 +182,26 @@ const SupplierManagement = () => {
             label="Telefone"
             value={currentSupplier.phone}
             onChange={handleInputChange}
+          />
+          <Autocomplete
+            multiple
+            options={products}
+            getOptionLabel={(option) => option.name}
+            value={currentSupplier.suppliedProducts}
+            onChange={handleProductChange}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                variant="outlined"
+                label="Produtos Fornecidos"
+                placeholder="Selecione os produtos"
+              />
+            )}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip variant="outlined" label={option.name} {...getTagProps({ index })} />
+              ))
+            }
           />
           <TextField
             fullWidth

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import BarcodeReader from 'react-barcode-reader';
 import {
@@ -23,11 +23,17 @@ import {
     Switch,
     FormControlLabel,
     useMediaQuery,
-    useTheme
+    useTheme,
+    MenuItem,
+    InputAdornment,
+    IconButton
 } from '@mui/material';
 import { NumericFormat } from 'react-number-format';
+import { ArrowForward as ArrowForwardIcon } from '@mui/icons-material';
 import ProductImport from './ProductImport';
 import { useAuth } from '../contexts/AuthContext';
+import WarningMessage from './WarningMessage';
+import ProductEditDialog from './ProductEditDialog';
 
 const ProductList = () => {
     const [products, setProducts] = useState([]);
@@ -39,18 +45,31 @@ const ProductList = () => {
     const [openDialog, setOpenDialog] = useState(false);
     const [loading, setLoading] = useState(false);
     const [openSnackbar, setOpenSnackbar] = useState(false);
-    const [newProduct, setNewProduct] = useState({ name: '', price: '', quantity: '', barcode: '' });
-    const [errors, setErrors] = useState({ name: '', price: '', quantity: '', barcode: '' });
+    const [newProduct, setNewProduct] = useState({ name: '', price: '', quantity: '', barcode: '', unit: '' });
+    const [errors, setErrors] = useState({ name: '', price: '', quantity: '', barcode: '', unit: '' });
     const [isScannerActive, setIsScannerActive] = useState(false);
     const [scannedBarcode, setScannedBarcode] = useState('');
     const apiUrl = process.env.REACT_APP_API_URL;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { user } = useAuth();
+    const priceInputRef = useRef(null);
+    const [editingProduct, setEditingProduct] = useState(null);
 
     useEffect(() => {
         fetchProducts();
     }, []);
+
+    useEffect(() => {
+        // Pré-seleciona a unidade com base no tipo de negócio
+        let defaultUnit = 'unidade';
+        if (user.businessType === 'Açougue') {
+            defaultUnit = 'kg';
+        } else if (user.businessType === 'Padaria' || user.businessType === 'Mercearia') {
+            defaultUnit = 'g';
+        }
+        setNewProduct(prev => ({ ...prev, unit: defaultUnit }));
+    }, [user.businessType]);
 
     const fetchProducts = async () => {
         try {
@@ -74,19 +93,19 @@ const ProductList = () => {
 
     const handleOpenDialog = () => {
         setOpenDialog(true);
-        setErrors({ name: '', price: '', quantity: '', barcode: '' });
-        setNewProduct({ name: '', price: '', quantity: '', barcode: '' });
+        setErrors({ name: '', price: '', quantity: '', barcode: '', unit: '' });
+        setNewProduct({ name: '', price: '', quantity: '', barcode: '', unit: '' });
     };
 
     const handleCloseDialog = () => {
         setOpenDialog(false);
-        setNewProduct({ name: '', price: '', quantity: '', barcode: '' });
-        setErrors({ name: '', price: '', quantity: '', barcode: '' });
+        setNewProduct({ name: '', price: '', quantity: '', barcode: '', unit: '' });
+        setErrors({ name: '', price: '', quantity: '', barcode: '', unit: '' });
     };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setNewProduct({ ...newProduct, [name]: value });
+        setNewProduct(prev => ({ ...prev, [name]: value }));
         validateField(name, value);
     };
 
@@ -105,6 +124,9 @@ const ProductList = () => {
             case 'barcode':
                 error = value.trim() === '' ? 'O código de barras é obrigatório' : '';
                 break;
+            case 'unit':
+                error = value.trim() === '' ? 'A unidade é obrigatória' : '';
+                break;
             default:
                 break;
         }
@@ -118,8 +140,9 @@ const ProductList = () => {
                 const productData = {
                     name: newProduct.name,
                     price: parseFloat(newProduct.price),
-                    quantity: parseInt(newProduct.quantity, 10),
-                    barcode: newProduct.barcode
+                    quantity: parseFloat(newProduct.quantity),
+                    barcode: newProduct.barcode,
+                    unit: newProduct.unit
                 };
                 await axios.post(`${apiUrl}/api/products`, productData);
                 setLoading(false);
@@ -157,18 +180,84 @@ const ProductList = () => {
         fetchProducts();
     };
 
-    const getUnitLabel = () => {
+    const getUnitOptions = () => {
         switch (user.businessType) {
             case 'Padaria':
             case 'Mercearia':
-                return 'Kg';
+                return ['kg', 'g', 'unidade'];
             case 'Papelaria':
-            case 'Material de Construção':
-                return 'Unidade';
+                return ['unidade', 'pacote'];
             case 'Açougue':
-                return 'Kg';
+                return ['kg', 'g'];
+            case 'Material de Construção':
+                return ['unidade', 'm', 'm²', 'm³'];
             default:
-                return 'Unidade';
+                return ['unidade'];
+        }
+    };
+
+    const handlePriceChange = (values) => {
+        const { value } = values;
+        setNewProduct(prev => ({ ...prev, price: value }));
+        validateField('price', value);
+    };
+
+    const moveCursorToCents = () => {
+        if (priceInputRef.current) {
+            const input = priceInputRef.current.querySelector('input');
+            if (input) {
+                const value = input.value;
+                const commaIndex = value.indexOf(',');
+                if (commaIndex !== -1) {
+                    input.setSelectionRange(commaIndex + 1, commaIndex + 1);
+                } else {
+                    input.setSelectionRange(value.length, value.length);
+                }
+                input.focus();
+            }
+        }
+    };
+
+    const renderBusinessTypeWarning = () => {
+        if (user.businessType === 'Açougue') {
+            return (
+                <WarningMessage 
+                    title="Atenção Açougues"
+                    message="A quantidade inserida deve representar o total do estoque em quilogramas (kg)."
+                    severity="info"
+                />
+            );
+        }
+        return null;
+    };
+
+    const handleEditProduct = (product) => {
+        setEditingProduct(product);
+    };
+
+    const handleSaveEditedProduct = async (editedProduct) => {
+        setLoading(true);
+        try {
+            // Primeiro, excluímos o produto existente
+            await axios.delete(`${apiUrl}/api/products?id=${editedProduct._id}`);
+
+            // Em seguida, criamos um novo produto com os dados atualizados
+            const { _id, ...productData } = editedProduct; // Removemos o _id para criar um novo registro
+            const response = await axios.post(`${apiUrl}/api/products`, productData);
+
+            if (response.status === 201) {
+                console.log('Produto atualizado com sucesso:', response.data);
+                setLoading(false);
+                setEditingProduct(null);
+                setOpenSnackbar(true);
+                fetchProducts(); // Atualiza a lista de produtos
+            } else {
+                throw new Error('Falha ao atualizar o produto');
+            }
+        } catch (error) {
+            console.error('Erro ao atualizar o produto:', error);
+            setLoading(false);
+            // Adicione aqui uma lógica para mostrar uma mensagem de erro ao usuário
         }
     };
 
@@ -190,7 +279,9 @@ const ProductList = () => {
                         <TableRow>
                             <TableCell>Nome</TableCell>
                             <TableCell align="right">Preço</TableCell>
-                            <TableCell align="right">Quantidade ({getUnitLabel()})</TableCell>
+                            <TableCell align="right">Quantidade</TableCell>
+                            <TableCell align="right">Unidade</TableCell>
+                            <TableCell align="right">Ações</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -201,6 +292,12 @@ const ProductList = () => {
                                 </TableCell>
                                 <TableCell align="right">R$ {parseFloat(product.price).toFixed(2)}</TableCell>
                                 <TableCell align="right">{product.quantity}</TableCell>
+                                <TableCell align="right">{product.unit}</TableCell>
+                                <TableCell align="right">
+                                    <Button onClick={() => handleEditProduct(product)}>
+                                        Editar
+                                    </Button>
+                                </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
@@ -210,6 +307,7 @@ const ProductList = () => {
             <Dialog open={openDialog} onClose={handleCloseDialog} fullScreen={isMobile}>
                 <DialogTitle>Adicionar Novo Produto</DialogTitle>
                 <DialogContent>
+                    {renderBusinessTypeWarning()}
                     <TextField
                         autoFocus
                         margin="dense"
@@ -229,16 +327,30 @@ const ProductList = () => {
                         label="Preço"
                         fullWidth
                         value={newProduct.price}
-                        onValueChange={(values) => {
-                            handleInputChange({ target: { name: 'price', value: values.value } });
-                        }}
+                        onValueChange={handlePriceChange}
                         thousandSeparator="."
                         decimalSeparator=","
                         prefix="R$ "
                         decimalScale={2}
                         fixedDecimalScale
+                        allowNegative={false}
+                        isNumericString
                         error={!!errors.price}
                         helperText={errors.price}
+                        InputProps={{
+                            endAdornment: (
+                                <InputAdornment position="end">
+                                    <IconButton
+                                        edge="end"
+                                        onClick={moveCursorToCents}
+                                        size="small"
+                                    >
+                                        <ArrowForwardIcon />
+                                    </IconButton>
+                                </InputAdornment>
+                            ),
+                        }}
+                        ref={priceInputRef}
                     />
                     <TextField
                         margin="dense"
@@ -262,6 +374,23 @@ const ProductList = () => {
                         error={!!errors.barcode}
                         helperText={errors.barcode}
                     />
+                    <TextField
+                        select
+                        margin="dense"
+                        name="unit"
+                        label="Unidade"
+                        fullWidth
+                        value={newProduct.unit}
+                        onChange={handleInputChange}
+                        error={!!errors.unit}
+                        helperText={errors.unit}
+                    >
+                        {getUnitOptions().map((option) => (
+                            <MenuItem key={option} value={option}>
+                                {option}
+                            </MenuItem>
+                        ))}
+                    </TextField>
                     <FormControlLabel
                         control={
                             <Switch
@@ -300,6 +429,14 @@ const ProductList = () => {
             </Snackbar>
 
             {!user.role === 'admin' && <ProductImport onImportComplete={handleImportComplete} />}
+
+            <ProductEditDialog
+                open={!!editingProduct}
+                onClose={() => setEditingProduct(null)}
+                product={editingProduct}
+                onSave={handleSaveEditedProduct}
+                businessType={user.businessType}
+            />
 
         </Box>
     );

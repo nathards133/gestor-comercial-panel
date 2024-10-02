@@ -1,19 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Typography, TextField, Button, Grid, Paper, List, ListItem, ListItemText, IconButton, Autocomplete } from '@mui/material';
+import { Typography, TextField, Button, Grid, Paper, List, ListItem, ListItemText, IconButton, Autocomplete, InputAdornment } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import PaymentNotificationList from './PaymentNotificationList';
+import { formatarQuantidade } from '../utils/formatters';
 
 const Home = () => {
     const [produtos, setProdutos] = useState([]);
     const [produtoSelecionado, setProdutoSelecionado] = useState(null);
-    const [quantidade, setQuantidade] = useState(1);
+    const [quantidade, setQuantidade] = useState('');
     const [carrinho, setCarrinho] = useState([]);
-    const navigate = useNavigate();
     const produtoInputRef = useRef(null);
     const quantidadeInputRef = useRef(null);
     const finalizarVendaButtonRef = useRef(null);
     const [inputValue, setInputValue] = useState('');
+    const { user } = useAuth();
+    const [notifications, setNotifications] = useState([]);
 
     const apiUrl = process.env.REACT_APP_API_URL;
 
@@ -34,11 +37,39 @@ const Home = () => {
         }
     }, [apiUrl]);
 
+    useEffect(() => {
+        const fetchNotifications = async () => {
+            try {
+                const response = await axios.get(`${apiUrl}/api/payments/notifications`);
+                setNotifications(response.data);
+            } catch (error) {
+                console.error('Erro ao buscar notificações:', error);
+            }
+        };
+
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 30000); // Atualiza a cada 30 segundos
+
+        return () => clearInterval(interval);
+    }, [apiUrl]);
+
     const adicionarAoCarrinho = useCallback(() => {
         if (produtoSelecionado) {
-            setCarrinho(prevCarrinho => [...prevCarrinho, { ...produtoSelecionado, quantidade }]);
+            let quantidadeNumerica = produtoSelecionado.unit === 'kg' 
+                ? parseFloat(quantidade.replace(',', '.')) 
+                : parseInt(quantidade, 10);
+            
+            if (isNaN(quantidadeNumerica) || quantidadeNumerica <= 0) {
+                alert('Por favor, insira uma quantidade válida.');
+                return;
+            }
+            
+            setCarrinho(prevCarrinho => [...prevCarrinho, { 
+                ...produtoSelecionado, 
+                quantidade: quantidadeNumerica 
+            }]);
             setProdutoSelecionado(null);
-            setQuantidade(1);
+            setQuantidade('');
             setInputValue('');
             if (produtoInputRef.current) {
                 produtoInputRef.current.focus();
@@ -87,17 +118,51 @@ const Home = () => {
         setInputValue(newInputValue);
     }, []);
 
+    const handleQuantidadeChange = (event) => {
+        let value = event.target.value;
+        if (produtoSelecionado && produtoSelecionado.unit === 'kg') {
+            if (value === '0') value = '0,';
+            if (!value.startsWith('0,')) value = '0,' + value.replace('0,', '');
+        } else {
+            value = value.replace(/[^0-9]/g, '');
+        }
+        setQuantidade(value);
+    };
+
+    const handleQuantidadeFocus = (event) => {
+        if (produtoSelecionado && produtoSelecionado.unit === 'kg') {
+            const input = event.target;
+            setTimeout(() => {
+                input.setSelectionRange(2, 2);
+            }, 0);
+        }
+    };
+
+    const getUnidadeMedida = () => {
+        return produtoSelecionado ? produtoSelecionado.unit : '';
+    };
+
+    useEffect(() => {
+        if (produtoSelecionado) {
+            if (produtoSelecionado.unit === 'kg') {
+                setQuantidade('0,');
+            } else {
+                setQuantidade('');
+            }
+        }
+    }, [produtoSelecionado]);
+
     return (
         <Grid container spacing={3}>
             <Grid item xs={12}>
-                <Typography variant="h4" align="center" gutterBottom>Frente de Caixa</Typography>
+                <Typography variant="h4" align="center" gutterBottom>Frente de Caixa - {user.businessType}</Typography>
             </Grid>
             <Grid item xs={12} md={6}>
                 <Paper elevation={3} style={{ padding: '20px' }}>
                     <Typography variant="h6" align="center" gutterBottom>Adicionar Produto</Typography>
                     <Autocomplete
                         options={produtos}
-                        getOptionLabel={(option) => `${option.name} - R$ ${option.price.toFixed(2)}`}
+                        getOptionLabel={(option) => `${option.name} - R$ ${option.price.toFixed(2)} / ${option.unit}`}
                         renderInput={(params) => (
                             <TextField
                                 {...params}
@@ -119,14 +184,18 @@ const Home = () => {
                         handleHomeEndKeys
                     />
                     <TextField
-                        type="number"
+                        type="text"
                         fullWidth
                         label="Quantidade"
                         value={quantidade}
-                        onChange={(e) => setQuantidade(parseInt(e.target.value))}
+                        onChange={handleQuantidadeChange}
+                        onFocus={handleQuantidadeFocus}
                         margin="normal"
                         inputRef={quantidadeInputRef}
                         onKeyDown={handleKeyDown}
+                        InputProps={{
+                            endAdornment: <InputAdornment position="end">{getUnidadeMedida()}</InputAdornment>,
+                        }}
                     />
                     <Button
                         variant="contained"
@@ -149,7 +218,7 @@ const Home = () => {
                                 </IconButton>
                             }>
                                 <ListItemText
-                                    primary={`${item.name} - ${item.quantidade}x R$ ${item.price.toFixed(2)}`}
+                                    primary={`${item.name} - ${formatarQuantidade(item.quantidade, item.unit)} x R$ ${item.price.toFixed(2)}`}
                                     secondary={`Total: R$ ${(item.price * item.quantidade).toFixed(2)}`}
                                 />
                             </ListItem>
@@ -168,6 +237,9 @@ const Home = () => {
                         Finalizar Venda
                     </Button>
                 </Paper>
+            </Grid>
+            <Grid item xs={12}>
+                <PaymentNotificationList notifications={notifications} />
             </Grid>
         </Grid>
     );

@@ -12,7 +12,7 @@ import StockManagement from './components/Stock';
 import SupplierManagement from './components/Supplier';
 import Login from './components/Login';
 import ReportsPage from './components/ReportsPage';
-
+import Integrations from './components/Integrations';
 const theme = createTheme({
   palette: {
     mode: 'light',
@@ -52,6 +52,7 @@ function App() {
               <Route path="stock" element={<StockManagement />} />
               <Route path="suppliers" element={<SupplierManagement />} />
               <Route path="reports" element={<ReportsPage />} />
+              <Route path="integrations" element={<Integrations />} />
             </Route>
           </Routes>
         </Router>
