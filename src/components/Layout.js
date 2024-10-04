@@ -9,45 +9,47 @@ import {
   AppBar, 
   Toolbar, 
   Typography, 
-  IconButton, 
-  Button,
+  IconButton,
   useMediaQuery,
   useTheme,
-  ListItemButton
+  ListItemButton,
+  CssBaseline,
+  Divider,
+  Menu,
+  MenuItem
 } from '@mui/material';
 import { 
   Home, 
   ShoppingCart, 
-  Payments, 
-  Inventory, 
   Assessment, 
   Menu as MenuIcon, 
   PointOfSale, 
   Store, 
-  ExitToApp,
   ChevronLeft,
   ChevronRight,
-  Settings
+  Settings,
+  Brightness4 as Brightness4Icon,
+  Brightness7 as Brightness7Icon,
+  AccountCircle,
+  ExitToApp,
+  AttachMoney
 } from '@mui/icons-material';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Badge, Dialog, DialogTitle, DialogContent } from '@mui/material';
 import NotificationsIcon from '@mui/icons-material/Notifications';
-import axios from 'axios';
 import PaymentNotificationList from './PaymentNotificationList';
 
 const menuItems = [
-  { text: 'Caixa', icon: <Home />, path: '/' },
+  { text: 'Caixa', icon: <PointOfSale />, path: '/' },
   { text: 'Produtos', icon: <ShoppingCart />, path: '/products' },
-  { text: 'Vendas', icon: <PointOfSale />, path: '/sales' },
+  { text: 'Vendas', icon: <AttachMoney />, path: '/sales' },
   { text: 'Relatórios', icon: <Assessment />, path: '/reports' },
-//   { text: 'Contas a Pagar', icon: <Payments />, path: '/contas-a-pagar' },
-//   { text: 'Gestão de Estoque', icon: <Inventory />, path: '/stock' },
   { text: 'Fornecedores', icon: <Store />, path: '/suppliers' },
   { text: 'Integrações', icon: <Settings />, path: '/integrations' },
 ];
 
-const Layout = () => {
+const Layout = ({ toggleTheme, isDarkMode }) => {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
   const theme = useTheme();
@@ -56,26 +58,16 @@ const Layout = () => {
   const [notifications, setNotifications] = useState([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
+  const [anchorEl, setAnchorEl] = useState(null);
 
   useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/payments/notifications`);
-        setNotifications(response.data);
-        setNotificationCount(response.data.length);
-      } catch (error) {
-        console.error('Erro ao buscar notificações:', error);
-      }
-    };
-
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // Atualiza a cada 30 segundos
-
-    return () => clearInterval(interval);
-  }, []);
+    setOpen(!isMobile);
+  }, [isMobile]);
 
   const handleDrawerToggle = () => {
-    setOpen(!open);
+    if (!isMobile) {
+      setOpen(!open);
+    }
   };
 
   const handleLogout = () => {
@@ -85,13 +77,22 @@ const Layout = () => {
 
   const handleNotificationClick = () => {
     setNotificationDialogOpen(true);
-    setNotificationCount(0); // Reseta o contador ao abrir as notificações
+    setNotificationCount(0);
   };
 
-  const drawerWidth = open ? 240 : 60;
+  const handleMenu = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const drawerWidth = isMobile ? 60 : (open ? 240 : 60);
 
   return (
     <Box sx={{ display: 'flex' }}>
+      <CssBaseline />
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
         <Toolbar>
           <IconButton
@@ -99,21 +100,59 @@ const Layout = () => {
             aria-label="open drawer"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ mr: 2 }}
+            sx={{ mr: 2, display: { sm: 'none' } }}
           >
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Bem vindo, {user?.company} - {user?.businessType}
+            Bem vindo, {user?.company}
           </Typography>
+          <IconButton color="inherit" onClick={toggleTheme}>
+            {isDarkMode ? <Brightness7Icon /> : <Brightness4Icon />}
+          </IconButton>
           <IconButton color="inherit" onClick={handleNotificationClick}>
             <Badge badgeContent={notificationCount} color="secondary">
               <NotificationsIcon />
             </Badge>
           </IconButton>
-          <Button color="inherit" onClick={handleLogout} startIcon={<ExitToApp />}>
-            Sair
-          </Button>
+          <IconButton
+            size="large"
+            aria-label="account of current user"
+            aria-controls="menu-appbar"
+            aria-haspopup="true"
+            onClick={handleMenu}
+            color="inherit"
+          >
+            <AccountCircle />
+          </IconButton>
+          <Menu
+            id="menu-appbar"
+            anchorEl={anchorEl}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            keepMounted
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+            open={Boolean(anchorEl)}
+            onClose={handleClose}
+            PaperProps={{
+              style: {
+                marginTop: '8px', // Adiciona um pequeno espaço entre a barra de ferramentas e o menu
+              },
+            }}
+          >
+            <MenuItem onClick={handleClose}>Perfil</MenuItem>
+            <MenuItem onClick={handleLogout}>
+              <ListItemIcon>
+                <ExitToApp fontSize="small" />
+              </ListItemIcon>
+              Sair
+            </MenuItem>
+          </Menu>
         </Toolbar>
       </AppBar>
       <Drawer
@@ -133,29 +172,31 @@ const Layout = () => {
         }}
       >
         <Toolbar />
-        <Box sx={{ overflow: 'auto' }}>
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          justifyContent: 'space-between', 
+          height: 'calc(100% - 64px)'
+        }}>
           <List>
             {menuItems.map((item) => (
               <ListItem 
-                key={item.path}  // Adicione esta linha
+                key={item.path}
                 component={Link} 
                 to={item.path}
-                sx={{ 
-                  justifyContent: open ? 'initial' : 'center',
-                  px: 2.5,
-                }}
+                disablePadding
               >
                 <ListItemButton
                   sx={{
                     minHeight: 48,
-                    justifyContent: open ? 'initial' : 'center',
+                    justifyContent: open && !isMobile ? 'initial' : 'center',
                     px: 2.5,
                   }}
                 >
                   <ListItemIcon
                     sx={{
                       minWidth: 0,
-                      mr: open ? 3 : 'auto',
+                      mr: open && !isMobile ? 3 : 'auto',
                       justifyContent: 'center',
                     }}
                   >
@@ -163,17 +204,20 @@ const Layout = () => {
                   </ListItemIcon>
                   <ListItemText 
                     primary={item.text} 
-                    sx={{ opacity: open ? 1 : 0 }} 
+                    sx={{ opacity: open && !isMobile ? 1 : 0 }} 
                   />
                 </ListItemButton>
               </ListItem>
             ))}
           </List>
-        </Box>
-        <Box sx={{ position: 'absolute', bottom: 0, width: '100%' }}>
-          <IconButton onClick={handleDrawerToggle}>
-            {open ? <ChevronLeft /> : <ChevronRight />}
-          </IconButton>
+          {!isMobile && (
+            <Box>
+              <Divider />
+              <IconButton onClick={handleDrawerToggle} sx={{ width: '100%', py: 1 }}>
+                {open ? <ChevronLeft /> : <ChevronRight />}
+              </IconButton>
+            </Box>
+          )}
         </Box>
       </Drawer>
       <Dialog open={notificationDialogOpen} onClose={() => setNotificationDialogOpen(false)}>

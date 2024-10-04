@@ -26,10 +26,23 @@ import {
     useTheme,
     MenuItem,
     InputAdornment,
-    IconButton
+    IconButton,
+    Card,
+    CardContent,
+    Grid,
+    Chip,
+    Tooltip,
+    Divider
 } from '@mui/material';
 import { NumericFormat } from 'react-number-format';
-import { ArrowForward as ArrowForwardIcon } from '@mui/icons-material';
+import { 
+    ArrowForward as ArrowForwardIcon, 
+    Search as SearchIcon, 
+    Archive as ArchiveIcon, 
+    Unarchive as UnarchiveIcon,
+    Edit as EditIcon,
+    Inventory as InventoryIcon
+} from '@mui/icons-material';
 import ProductImport from './ProductImport';
 import { useAuth } from '../contexts/AuthContext';
 import WarningMessage from './WarningMessage';
@@ -52,9 +65,12 @@ const ProductList = () => {
     const apiUrl = process.env.REACT_APP_API_URL;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
     const { user } = useAuth();
     const priceInputRef = useRef(null);
     const [editingProduct, setEditingProduct] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [showArchived, setShowArchived] = useState(false);
 
     useEffect(() => {
         fetchProducts();
@@ -261,48 +277,172 @@ const ProductList = () => {
         }
     };
 
+    const handleArchiveProduct = async (productId) => {
+        try {
+            await axios.patch(`${apiUrl}/api/products/${productId}/archive`);
+            fetchProducts();
+        } catch (error) {
+            console.error('Erro ao arquivar produto:', error);
+        }
+    };
+
+    const handleUnarchiveProduct = async (productId) => {
+        try {
+            await axios.patch(`${apiUrl}/api/products/${productId}/unarchive`);
+            fetchProducts();
+        } catch (error) {
+            console.error('Erro ao desarquivar produto:', error);
+        }
+    };
+
+    const filteredProducts = products.filter(product => 
+        (showArchived ? product.archived : !product.archived) &&
+        product.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const renderProductCard = (product) => (
+        <Card key={product._id} sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ flexGrow: 1 }}>
+                <Typography variant="h6" component="div" gutterBottom>
+                    {product.name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                    Preço: R$ {parseFloat(product.price).toFixed(2)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                    Quantidade: {product.quantity} {product.unit}
+                </Typography>
+                <Box mt={2}>
+                    <Chip 
+                        label={product.archived ? "Arquivado" : "Ativo"} 
+                        color={product.archived ? "default" : "primary"} 
+                        size="small" 
+                    />
+                </Box>
+            </CardContent>
+            <Box sx={{ p: 2, pt: 0 }}>
+                <Button 
+                    startIcon={<EditIcon />}
+                    onClick={() => handleEditProduct(product)}
+                    fullWidth
+                    variant="outlined"
+                    sx={{ mb: 1 }}
+                >
+                    Editar
+                </Button>
+                <Button
+                    startIcon={product.archived ? <UnarchiveIcon /> : <ArchiveIcon />}
+                    onClick={() => product.archived ? handleUnarchiveProduct(product._id) : handleArchiveProduct(product._id)}
+                    fullWidth
+                    variant="outlined"
+                    color={product.archived ? "primary" : "secondary"}
+                >
+                    {product.archived ? "Desarquivar" : "Arquivar"}
+                </Button>
+            </Box>
+        </Card>
+    );
+
     return (
         <Box sx={{ p: 2 }}>
             <Typography variant={isMobile ? "h5" : "h4"} align="center" gutterBottom>
-                Lista de Produtos - {user.businessType}
+                Estoque de Produtos
             </Typography>
 
-            <Box display="flex" justifyContent="flex-end" mb={2}>
-                <Button variant="contained" color="primary" onClick={handleOpenDialog}>
-                    Adicionar Produto
-                </Button>
+            <Box sx={{ mb: 3 }}>
+                <Alert severity="info" icon={<InventoryIcon />}>
+                    Esta tela reflete o estoque atual do seu estabelecimento. Mantenha-o atualizado para uma gestão eficiente.
+                </Alert>
             </Box>
 
-            <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-                <Table size={isMobile ? "small" : "medium"}>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Nome</TableCell>
-                            <TableCell align="right">Preço</TableCell>
-                            <TableCell align="right">Quantidade</TableCell>
-                            <TableCell align="right">Unidade</TableCell>
-                            <TableCell align="right">Ações</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {products.map((product) => (
-                            <TableRow key={product._id}>
-                                <TableCell component="th" scope="row">
-                                    {product.name}
-                                </TableCell>
-                                <TableCell align="right">R$ {parseFloat(product.price).toFixed(2)}</TableCell>
-                                <TableCell align="right">{product.quantity}</TableCell>
-                                <TableCell align="right">{product.unit}</TableCell>
-                                <TableCell align="right">
-                                    <Button onClick={() => handleEditProduct(product)}>
-                                        Editar
-                                    </Button>
-                                </TableCell>
+            <Box display="flex" flexDirection={isMobile ? "column" : "row"} justifyContent="space-between" alignItems={isMobile ? "stretch" : "center"} mb={2}>
+                <TextField
+                    variant="outlined"
+                    size="small"
+                    placeholder="Buscar produto"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    InputProps={{
+                        startAdornment: (
+                            <InputAdornment position="start">
+                                <SearchIcon />
+                            </InputAdornment>
+                        ),
+                    }}
+                    fullWidth={isMobile}
+                    sx={{ mb: isMobile ? 2 : 0 }}
+                />
+                <Box>
+                    <Button
+                        variant="outlined"
+                        onClick={() => setShowArchived(!showArchived)}
+                        sx={{ mr: 1, mb: isMobile ? 1 : 0 }}
+                        fullWidth={isMobile}
+                    >
+                        {showArchived ? 'Mostrar Ativos' : 'Mostrar Arquivados'}
+                    </Button>
+                    <Button 
+                        variant="contained" 
+                        color="primary" 
+                        onClick={handleOpenDialog}
+                        fullWidth={isMobile}
+                    >
+                        Adicionar Produto
+                    </Button>
+                </Box>
+            </Box>
+
+            <Divider sx={{ my: 2 }} />
+
+            {isMobile || isTablet ? (
+                <Grid container spacing={2}>
+                    {filteredProducts.map((product) => (
+                        <Grid item xs={12} sm={6} key={product._id}>
+                            {renderProductCard(product)}
+                        </Grid>
+                    ))}
+                </Grid>
+            ) : (
+                <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+                    <Table>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Nome</TableCell>
+                                <TableCell align="right">Preço</TableCell>
+                                <TableCell align="right">Quantidade</TableCell>
+                                <TableCell align="right">Unidade</TableCell>
+                                <TableCell align="right">Ações</TableCell>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+                        </TableHead>
+                        <TableBody>
+                            {filteredProducts.map((product) => (
+                                <TableRow key={product._id}>
+                                    <TableCell component="th" scope="row">
+                                        {product.name}
+                                    </TableCell>
+                                    <TableCell align="right">R$ {parseFloat(product.price).toFixed(2)}</TableCell>
+                                    <TableCell align="right">{product.quantity}</TableCell>
+                                    <TableCell align="right">{product.unit}</TableCell>
+                                    <TableCell align="right">
+                                        <Button onClick={() => handleEditProduct(product)}>
+                                            Editar
+                                        </Button>
+                                        {product.archived ? (
+                                            <IconButton onClick={() => handleUnarchiveProduct(product._id)}>
+                                                <UnarchiveIcon />
+                                            </IconButton>
+                                        ) : (
+                                            <IconButton onClick={() => handleArchiveProduct(product._id)}>
+                                                <ArchiveIcon />
+                                            </IconButton>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            )}
 
             <Dialog open={openDialog} onClose={handleCloseDialog} fullScreen={isMobile}>
                 <DialogTitle>Adicionar Novo Produto</DialogTitle>
