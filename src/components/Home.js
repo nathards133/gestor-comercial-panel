@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-    Typography, TextField, Button, Grid, Paper, List, ListItem, ListItemText, 
+import {
+    Typography, TextField, Button, Grid, Paper, List, ListItem, ListItemText,
     IconButton, Autocomplete, InputAdornment, Box, Stepper, Step, StepLabel,
     useMediaQuery, useTheme, Card, CardContent, Divider, Alert, Tooltip,
     FormControl,
     InputLabel,
     Select,
-    MenuItem
+    MenuItem,
+    Snackbar,
+    CircularProgress,
+    Chip
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
@@ -25,11 +28,13 @@ const Home = () => {
     const produtoInputRef = useRef(null);
     const quantidadeInputRef = useRef(null);
     const finalizarVendaButtonRef = useRef(null);
-    const [inputValue, setInputValue] = useState('');
+    // const [inputValue, setInputValue] = useState('');    
     const { user } = useAuth();
     const [notifications, setNotifications] = useState([]);
     const [paymentMethod, setPaymentMethod] = useState('');
     const [mostUsedPaymentMethod, setMostUsedPaymentMethod] = useState('');
+    const [topSellingProducts, setTopSellingProducts] = useState([]);
+    const paymentMethodRef = useRef(null);
 
     const apiUrl = process.env.REACT_APP_API_URL;
 
@@ -38,6 +43,57 @@ const Home = () => {
 
     const [activeStep, setActiveStep] = useState(0);
     const steps = ['Adicionar Produtos', 'Revisar Carrinho', 'Finalizar Pagamento'];
+
+    const [snackbar, setSnackbar] = useState({
+        open: false,
+        message: '',
+        severity: 'success'
+    });
+
+    const handleCloseSnackbar = (event, reason) => {
+        if (reason === 'clickaway') {
+            return;
+        }
+        setSnackbar({ ...snackbar, open: false });
+    };
+
+    const [isFinalizingVenda, setIsFinalizingVenda] = useState(false);
+
+    const updateTopSellingProducts = useCallback(async () => {
+    try {
+        const response = await axios.get(`${apiUrl}/api/products/top-selling`);
+        const topProducts = response.data.products.slice(0, 3); // Acesse a propriedade 'products'
+        setTopSellingProducts(topProducts);
+        localStorage.setItem('topSellingProducts', JSON.stringify(topProducts));
+    } catch (error) {
+        console.error('Erro ao buscar produtos mais vendidos:', error);
+    }
+}, [apiUrl]);
+
+    useEffect(() => {
+        const fetchMostUsedPaymentMethod = async () => {
+            try {
+                const response = await axios.get(`${apiUrl}/api/sales/most-used-payment-method`);
+                const method = response.data.method;
+
+                // Verifica se o método armazenado é diferente do que está sendo recuperado
+                const storedMethod = localStorage.getItem('mostUsedPaymentMethod');
+                if (method !== storedMethod) {
+                    setMostUsedPaymentMethod(method);
+                    setPaymentMethod(method); // Pré-seleciona o método mais usado
+                    localStorage.setItem('mostUsedPaymentMethod', method); // Armazena no localStorage
+                } else {
+                    // Se o método já estiver armazenado, apenas define o estado
+                    setMostUsedPaymentMethod(storedMethod);
+                    setPaymentMethod(storedMethod);
+                }
+            } catch (error) {
+                console.error('Erro ao buscar método de pagamento mais usado:', error);
+            }
+        };
+
+        fetchMostUsedPaymentMethod();
+    }, [apiUrl]);
 
     useEffect(() => {
         const buscarProdutos = async () => {
@@ -50,41 +106,62 @@ const Home = () => {
             }
         };
         buscarProdutos();
+        updateTopSellingProducts();
 
         if (produtoInputRef.current) {
             produtoInputRef.current.focus();
         }
+    }, [apiUrl, updateTopSellingProducts]);
+
+    useEffect(() => {
+        // const fetchNotifications = async () => {
+        //     try {
+        //         const response = await axios.get(`${apiUrl}/api/payments/notifications`);
+        //         setNotifications(response.data);
+        //     } catch (error) {
+        //         console.error('Erro ao buscar notificações:', error);
+        //     }
+        // };
+
+        // fetchNotifications();
+        // const interval = setInterval(fetchNotifications, 30000); // Atualiza a cada 30 segundos
+
+        // return () => clearInterval(interval);
     }, [apiUrl]);
 
     useEffect(() => {
-        const fetchNotifications = async () => {
-            try {
-                const response = await axios.get(`${apiUrl}/api/payments/notifications`);
-                setNotifications(response.data);
-            } catch (error) {
-                console.error('Erro ao buscar notificações:', error);
+        const storedMethod = localStorage.getItem('mostUsedPaymentMethod');
+        if (storedMethod) {
+            setMostUsedPaymentMethod(storedMethod); // Recupera o método armazenado
+            setPaymentMethod(storedMethod); // Define como método de pagamento atual
+        }
+    }, []);
+
+    const removerDoCarrinho = useCallback((index) => {
+        setCarrinho(prevCarrinho => {
+            const novoCarrinho = prevCarrinho.filter((_, i) => i !== index);
+            if (novoCarrinho.length === 0) {
+                setActiveStep(0);
+                setTimeout(() => {
+                    if (produtoInputRef.current) {
+                        produtoInputRef.current.focus();
+                    }
+                }, 0);
+            } else {
+                setTimeout(() => {
+                    const listItems = document.querySelectorAll('.carrinho-item');
+                    if (listItems.length > 0) {
+                        const nextItem = listItems[Math.min(index, listItems.length - 1)];
+                        const deleteButton = nextItem.querySelector('button');
+                        if (deleteButton) {
+                            deleteButton.focus();
+                        }
+                    }
+                }, 0);
             }
-        };
-
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30000); // Atualiza a cada 30 segundos
-
-        return () => clearInterval(interval);
-    }, [apiUrl]);
-
-    useEffect(() => {
-        const fetchMostUsedPaymentMethod = async () => {
-            try {
-                const response = await axios.get(`${apiUrl}/api/sales/most-used-payment-method`);
-                setMostUsedPaymentMethod(response.data.method);
-                setPaymentMethod(response.data.method); // Pré-seleciona o método mais usado
-            } catch (error) {
-                console.error('Erro ao buscar método de pagamento mais usado:', error);
-            }
-        };
-
-        fetchMostUsedPaymentMethod();
-    }, [apiUrl]);
+            return novoCarrinho;
+        });
+    }, []);
 
     const adicionarAoCarrinho = useCallback(() => {
         if (produtoSelecionado) {
@@ -103,7 +180,6 @@ const Home = () => {
             }]);
             setProdutoSelecionado(null);
             setQuantidade('');
-            setInputValue('');
             if (produtoInputRef.current) {
                 produtoInputRef.current.focus();
             }
@@ -112,49 +188,72 @@ const Home = () => {
 
     const handleKeyDown = useCallback((e) => {
         if (e.key === 'Enter') {
-            if (produtoSelecionado && e.target === quantidadeInputRef.current) {
-                adicionarAoCarrinho();
-            } else if (produtoSelecionado && e.target === produtoInputRef.current) {
-                if (quantidadeInputRef.current) {
-                    quantidadeInputRef.current.focus();
+            e.preventDefault();
+            if (activeStep === 0) {
+                if (produtoSelecionado && e.target === quantidadeInputRef.current) {
+                    adicionarAoCarrinho();
+                } else if (e.target === produtoInputRef.current) {
+                    const firstOption = produtos.find(p =>
+                        p.name.toLowerCase().includes(e.target.value.toLowerCase())
+                    );
+                    
+                    if (firstOption) {
+                        setProdutoSelecionado(firstOption.name);
+                        console.log('Produto selecionado:', firstOption.name);
+                        quantidadeInputRef.current.focus();
+                    }
                 }
-            } else if (e.target === finalizarVendaButtonRef.current) {
-                finalizarVenda();
-            }
+            } 
         }
-    }, [produtoSelecionado, adicionarAoCarrinho]);
-
-    const removerDoCarrinho = useCallback((index) => {
-        setCarrinho(prevCarrinho => prevCarrinho.filter((_, i) => i !== index));
-    }, []);
+    }, [adicionarAoCarrinho, activeStep, produtos,produtoSelecionado]); 
+    
 
     const finalizarVenda = useCallback(async () => {
+        setIsFinalizingVenda(true);
         try {
-            await axios.post(`${apiUrl}/api/sales`, { 
+            await axios.post(`${apiUrl}/api/sales`, {
                 items: carrinho,
-                paymentMethod: paymentMethod 
+                paymentMethod: paymentMethod
             });
             setCarrinho([]);
             setPaymentMethod('');
+            setActiveStep(0); // Redireciona para o passo 0
+            setSnackbar({
+                open: true,
+                message: 'Venda finalizada com sucesso!',
+                severity: 'success'
+            });
+            updateTopSellingProducts(); // Atualiza os produtos mais vendidos
             if (produtoInputRef.current) {
                 produtoInputRef.current.focus();
             }
         } catch (error) {
             console.error('Erro ao finalizar venda:', error);
+            setSnackbar({
+                open: true,
+                message: 'Erro ao finalizar venda. Tente novamente.',
+                severity: 'error'
+            });
+        } finally {
+            setIsFinalizingVenda(false);
         }
-    }, [carrinho, paymentMethod, apiUrl]);
+    }, [carrinho, paymentMethod, apiUrl, updateTopSellingProducts]);
 
     const handleAutocompleteChange = useCallback((event, newValue) => {
-        setProdutoSelecionado(newValue);
-        if (newValue && quantidadeInputRef.current) {
-            quantidadeInputRef.current.focus();
+        setProdutoSelecionado(newValue); // Atualiza o produto selecionado
+        if (newValue) {
+            setQuantidade(''); // Limpa a quantidade ao selecionar um novo produto
+            if (quantidadeInputRef.current) {
+                quantidadeInputRef.current.focus(); // Foca na quantidade
+            }
         }
     }, []);
 
     const handleInputChange = useCallback((event, newInputValue) => {
-        setInputValue(newInputValue);
+        if (newInputValue === '') {
+            setProdutoSelecionado(null); // Limpa a seleção se o input estiver vazio
+        }
     }, []);
-
     const handleQuantidadeChange = (event) => {
         let value = event.target.value;
         if (produtoSelecionado && produtoSelecionado.unit === 'kg') {
@@ -190,7 +289,13 @@ const Home = () => {
     }, [produtoSelecionado]);
 
     const handleNext = () => {
-        setActiveStep((prevActiveStep) => prevActiveStep + 1);
+        setActiveStep((prevActiveStep) => {
+            const nextStep = prevActiveStep + 1;
+            if (nextStep === 2 && paymentMethodRef.current) {
+                setTimeout(() => paymentMethodRef.current.focus(), 0);
+            }
+            return nextStep;
+        });
     };
 
     const handleBack = () => {
@@ -198,7 +303,20 @@ const Home = () => {
     };
 
     const handlePaymentMethodChange = (event) => {
-        setPaymentMethod(event.target.value);
+        const selectedMethod = event.target.value;
+        setPaymentMethod(selectedMethod);
+
+        // Atualiza o localStorage apenas se o método selecionado for diferente do armazenado
+        const storedMethod = localStorage.getItem('mostUsedPaymentMethod');
+        if (selectedMethod !== storedMethod) {
+            localStorage.setItem('mostUsedPaymentMethod', selectedMethod); // Atualiza o localStorage
+        }
+    };
+
+    const handlePaymentMethodKeyDown = (event) => {
+        if (event.key === 'Enter' && !paymentMethod) {
+            setPaymentMethod(mostUsedPaymentMethod);
+        }
     };
 
     const renderStepContent = (step) => {
@@ -208,8 +326,13 @@ const Home = () => {
                     <Box>
                         <Typography variant="h6" gutterBottom>Adicionar Produtos ao Carrinho</Typography>
                         <Autocomplete
-                            options={produtos}
-                            getOptionLabel={(option) => `${option.name} - R$ ${option.price.toFixed(2)} / ${option.unit}`}
+                            options={produtos || []}
+                            getOptionLabel={(option) => {
+                                if (!option) return '';
+                                if (typeof option === 'string') return option;
+                                return option.name ? `${option.name} - R$ ${option.price.toFixed(2)} / ${option.unit}` : '';
+                            }}
+                            getOptionSelected={(option, value) => option._id === value._id}
                             renderInput={(params) => (
                                 <TextField
                                     {...params}
@@ -221,7 +344,6 @@ const Home = () => {
                             )}
                             value={produtoSelecionado}
                             onChange={handleAutocompleteChange}
-                            inputValue={inputValue}
                             onInputChange={handleInputChange}
                             isOptionEqualToValue={(option, value) => option._id === value._id}
                             fullWidth
@@ -230,6 +352,7 @@ const Home = () => {
                             clearOnBlur
                             handleHomeEndKeys
                         />
+
                         <TextField
                             type="text"
                             fullWidth
@@ -289,16 +412,36 @@ const Home = () => {
                 return (
                     <Box>
                         <Typography variant="h6" gutterBottom>Revisar Carrinho</Typography>
-                        <List>
+                        <List onKeyDown={handleKeyDown}>
                             {carrinho.map((item, index) => (
-                                <ListItem key={index} secondaryAction={
-                                    <IconButton edge="end" aria-label="delete" onClick={() => removerDoCarrinho(index)}>
-                                        <DeleteIcon />
-                                    </IconButton>
-                                }>
+                                <ListItem 
+                                    key={index} 
+                                    className="carrinho-item"
+                                    secondaryAction={
+                                        <IconButton 
+                                            edge="end" 
+                                            aria-label="delete" 
+                                            onClick={() => removerDoCarrinho(index) }
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    removerDoCarrinho(index);
+                                                }
+                                            }}
+                                            tabIndex={0}
+                                        >
+                                            <DeleteIcon />
+                                        </IconButton>
+                                    }
+                                    sx={{ 
+                                        bgcolor: 'background.paper', 
+                                        mb: 1, 
+                                        borderRadius: 1,
+                                        boxShadow: 1
+                                    }}
+                                >
                                     <ListItemText
-                                        primary={`${item.name} - ${formatarQuantidade(item.quantidade, item.unit)} x R$ ${item.price.toFixed(2)}`}
-                                        secondary={`Total: R$ ${(item.price * item.quantidade).toFixed(2)}`}
+                                        primary={item.name}
+                                        secondary={`${formatarQuantidade(item.quantidade, item.unit)} x R$ ${item.price.toFixed(2)} = R$ ${(item.price * item.quantidade).toFixed(2)}`}
                                     />
                                 </ListItem>
                             ))}
@@ -323,7 +466,9 @@ const Home = () => {
                                 labelId="payment-method-label"
                                 value={paymentMethod}
                                 onChange={handlePaymentMethodChange}
+                                onKeyDown={handlePaymentMethodKeyDown}
                                 label="Método de Pagamento"
+                                inputRef={paymentMethodRef}
                             >
                                 <MenuItem value="dinheiro">Dinheiro</MenuItem>
                                 <MenuItem value="cartao_credito">Cartão de Crédito</MenuItem>
@@ -340,16 +485,15 @@ const Home = () => {
                             onClick={finalizarVenda}
                             ref={finalizarVendaButtonRef}
                             onKeyDown={handleKeyDown}
-                            startIcon={<PaymentIcon />}
+                            startIcon={isFinalizingVenda ? <CircularProgress size={24} color="inherit" /> : <PaymentIcon />}
                             fullWidth
-                            disabled={!paymentMethod}
+                            disabled={!paymentMethod || isFinalizingVenda}
                         >
-                            Finalizar Venda
+                            {isFinalizingVenda ? 'Finalizando...' : 'Finalizar Venda'}
                         </Button>
                     </Box>
                 );
-            default:
-                return 'Passo Desconhecido';
+            default: return
         }
     };
 
@@ -393,6 +537,29 @@ const Home = () => {
             </Box>
 
             <Divider sx={{ my: 2 }} />
+
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={3000}
+                onClose={handleCloseSnackbar}
+                anchorOrigin={{ vertical: 'top', horizontal: 'right' }} // Ajuste para o canto superior direito
+            >
+                <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
+
+            <Box sx={{ mt: 2, mb: 2 }}>
+                <Typography variant="subtitle1">Produtos mais vendidos</Typography>
+                {topSellingProducts.map((product, index) => (
+                    <Chip
+                        key={product._id}
+                        label={`${index + 1}: ${product.name}`}
+                        onClick={() => setProdutoSelecionado(product)}
+                        sx={{ mr: 1, mb: 1 }}
+                    />
+                ))}
+            </Box>
         </Box>
     );
 };

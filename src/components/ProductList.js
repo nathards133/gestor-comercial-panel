@@ -40,7 +40,7 @@ import {
     Search as SearchIcon, 
     Archive as ArchiveIcon, 
     Unarchive as UnarchiveIcon,
-    Edit as EditIcon,
+    Edit as EditIcon, 
     Inventory as InventoryIcon
 } from '@mui/icons-material';
 import ProductImport from './ProductImport';
@@ -71,6 +71,13 @@ const ProductList = () => {
     const [editingProduct, setEditingProduct] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [showArchived, setShowArchived] = useState(false);
+    const [snackbar, setSnackbar] = useState({
+        open: false,
+        message: '',
+        severity: 'success'
+    });
+    const [lowStockProducts, setLowStockProducts] = useState([]);
+    const [stockAlerts, setStockAlerts] = useState([]);
 
     useEffect(() => {
         fetchProducts();
@@ -121,6 +128,9 @@ const ProductList = () => {
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
+        if (name === 'quantity' && parseFloat(value) < 0) {
+            return; // Não permite valores negativos para quantidade
+        }
         setNewProduct(prev => ({ ...prev, [name]: value }));
         validateField(name, value);
     };
@@ -163,11 +173,20 @@ const ProductList = () => {
                 await axios.post(`${apiUrl}/api/products`, productData);
                 setLoading(false);
                 handleCloseDialog();
-                setOpenSnackbar(true);
+                setSnackbar({
+                    open: true,
+                    message: 'Produto cadastrado com sucesso!',
+                    severity: 'success'
+                });
                 fetchProducts();
             } catch (error) {
                 console.error('Erro ao salvar o produto:', error);
                 setLoading(false);
+                setSnackbar({
+                    open: true,
+                    message: 'Erro ao cadastrar o produto. Por favor, tente novamente.',
+                    severity: 'error'
+                });
             }
         }
     };
@@ -248,33 +267,17 @@ const ProductList = () => {
     };
 
     const handleEditProduct = (product) => {
+        console.log('Abrindo diálogo de edição para o produto:', product);
         setEditingProduct(product);
     };
 
-    const handleSaveEditedProduct = async (editedProduct) => {
-        setLoading(true);
-        try {
-            // Primeiro, excluímos o produto existente
-            await axios.delete(`${apiUrl}/api/products?id=${editedProduct._id}`);
-
-            // Em seguida, criamos um novo produto com os dados atualizados
-            const { _id, ...productData } = editedProduct; // Removemos o _id para criar um novo registro
-            const response = await axios.post(`${apiUrl}/api/products`, productData);
-
-            if (response.status === 201) {
-                console.log('Produto atualizado com sucesso:', response.data);
-                setLoading(false);
-                setEditingProduct(null);
-                setOpenSnackbar(true);
-                fetchProducts(); // Atualiza a lista de produtos
-            } else {
-                throw new Error('Falha ao atualizar o produto');
-            }
-        } catch (error) {
-            console.error('Erro ao atualizar o produto:', error);
-            setLoading(false);
-            // Adicione aqui uma lógica para mostrar uma mensagem de erro ao usuário
-        }
+    const handleProductUpdated = () => {
+        fetchProducts();
+        setSnackbar({
+            open: true,
+            message: 'Produto atualizado com sucesso!',
+            severity: 'success'
+        });
     };
 
     const handleArchiveProduct = async (productId) => {
@@ -343,8 +346,37 @@ const ProductList = () => {
         </Card>
     );
 
+    const handleCloseSnackbar = (event, reason) => {
+        if (reason === 'clickaway') {
+            return;
+        }
+        setSnackbar({ ...snackbar, open: false });
+    };
+
+    const getDefaultUnit = (businessType) => {
+        switch (businessType) {
+            case 'Açougue':
+                return 'kg';
+            case 'Padaria':
+            case 'Mercearia':
+                return 'g';
+            default:
+                return 'unidade';
+        }
+    };
+
     return (
         <Box sx={{ p: 2 }}>
+            {lowStockProducts.length > 0 && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                    Produtos com estoque baixo: {lowStockProducts.map(p => p.name).join(', ')}
+                </Alert>
+            )}
+            {stockAlerts.map((alert, index) => (
+                <Alert key={index} severity="error" sx={{ mb: 2 }}>
+                    {alert}
+                </Alert>
+            ))}
             <Typography variant={isMobile ? "h5" : "h4"} align="center" gutterBottom>
                 Estoque de Produtos
             </Typography>
@@ -558,13 +590,13 @@ const ProductList = () => {
             </Dialog>
 
             <Snackbar
-                open={openSnackbar}
+                open={snackbar.open}
                 autoHideDuration={6000}
-                onClose={() => setOpenSnackbar(false)}
+                onClose={handleCloseSnackbar}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             >
-                <Alert onClose={() => setOpenSnackbar(false)} severity="success" sx={{ width: '100%' }}>
-                    Produto salvo com sucesso!
+                <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+                    {snackbar.message}
                 </Alert>
             </Snackbar>
 
@@ -574,12 +606,14 @@ const ProductList = () => {
                 open={!!editingProduct}
                 onClose={() => setEditingProduct(null)}
                 product={editingProduct}
-                onSave={handleSaveEditedProduct}
+                onProductUpdated={handleProductUpdated}
                 businessType={user.businessType}
+                userId={user._id} // Passando o userId para o ProductEditDialog
             />
 
         </Box>
     );
 };
+
 
 export default ProductList;

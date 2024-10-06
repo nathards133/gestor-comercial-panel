@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import {
     Dialog,
     DialogTitle,
@@ -8,33 +9,50 @@ import {
     Button,
     MenuItem,
     InputAdornment,
-    IconButton
+    IconButton,
+    CircularProgress
 } from '@mui/material';
 import { NumericFormat } from 'react-number-format';
 import { ArrowForward as ArrowForwardIcon } from '@mui/icons-material';
 
-const ProductEditDialog = ({ open, onClose, product, onSave, businessType }) => {
+const ProductEditDialog = ({ open, onClose, product, onProductUpdated, businessType, userId }) => {
     const [editedProduct, setEditedProduct] = useState({
-        _id: '',
         name: '',
         price: '',
         quantity: '',
-        unit: ''
+        unit: '',
+        barcode: '',
     });
     const [errors, setErrors] = useState({});
+    const [loading, setLoading] = useState(false);
     const priceInputRef = useRef(null);
+    const apiUrl = process.env.REACT_APP_API_URL;
 
     useEffect(() => {
         if (product) {
             setEditedProduct({
-                _id: product._id || '',
+                _id: product._id,
                 name: product.name || '',
                 price: product.price || '',
                 quantity: product.quantity || '',
-                unit: product.unit || ''
+                unit: product.unit || getDefaultUnit(businessType),
+                barcode: product.barcode || '',
+                userId: userId
             });
         }
-    }, [product]);
+    }, [product, businessType, userId]);
+
+    const getDefaultUnit = (businessType) => {
+        switch (businessType) {
+            case 'Açougue':
+                return 'kg';
+            case 'Padaria':
+            case 'Mercearia':
+                return 'g';
+            default:
+                return 'unidade';
+        }
+    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -71,18 +89,76 @@ const ProductEditDialog = ({ open, onClose, product, onSave, businessType }) => 
 
     const validateForm = () => {
         const newErrors = {};
-        Object.keys(editedProduct).forEach(key => {
-            validateField(key, editedProduct[key]);
-            newErrors[key] = errors[key];
-        });
+        let isValid = true;
+    
+        // Validar nome
+        if (!editedProduct.name.trim()) {
+            newErrors.name = 'O nome do produto é obrigatório';
+            isValid = false;
+        }
+    
+        // Validar preço
+        if (!editedProduct.price || parseFloat(editedProduct.price) <= 0) {
+            newErrors.price = 'O preço deve ser maior que zero';
+            isValid = false;
+        }
+    
+        // Validar quantidade
+        if (editedProduct.quantity === '' || parseFloat(editedProduct.quantity) < 0) {
+            newErrors.quantity = 'A quantidade não pode ser negativa';
+            isValid = false;
+        }
+    
+        // Validar unidade
+        if (!editedProduct.unit.trim()) {
+            newErrors.unit = 'A unidade é obrigatória';
+            isValid = false;
+        }
+    
+        // Opcional: validar código de barras se necessário
+        // if (!editedProduct.barcode.trim()) {
+        //     newErrors.barcode = 'O código de barras é obrigatório';
+        //     isValid = false;
+        // }
+    
         setErrors(newErrors);
-        return Object.values(newErrors).every(error => error === '');
+        return isValid;
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (validateForm()) {
-            console.log('Dados do produto a serem salvos:', editedProduct);
-            onSave(editedProduct);
+            setLoading(true);
+            try {
+                const updatedProduct = {
+                    _id: editedProduct._id,
+                    name: editedProduct.name,
+                    price: parseFloat(editedProduct.price),
+                    quantity: parseFloat(editedProduct.quantity),
+                    unit: editedProduct.unit,
+                    barcode: editedProduct.barcode
+                };
+
+                const token = localStorage.getItem('token');
+                const config = {
+                    headers: { Authorization: `Bearer ${token}` }
+                };
+
+                console.log('Enviando produto editado para a API:', updatedProduct);
+                const response = await axios.put(`${apiUrl}/api/products/${updatedProduct._id}`, updatedProduct, config);
+
+                if (response.status === 200) {
+                    console.log('Produto atualizado com sucesso:', response.data);
+                    onProductUpdated();
+                    onClose();
+                } else {
+                    throw new Error('Falha ao atualizar o produto');
+                }
+            } catch (error) {
+                console.error('Erro ao atualizar o produto:', error);
+                // Aqui você pode adicionar uma lógica para mostrar uma mensagem de erro ao usuário
+            } finally {
+                setLoading(false);
+            }
         }
     };
 
@@ -135,7 +211,26 @@ const ProductEditDialog = ({ open, onClose, product, onSave, businessType }) => 
                     helperText={errors.name}
                 />
                 <NumericFormat
-                    customInput={TextField}
+                    customInput={(props) => (
+                        <TextField
+                            {...props}
+                            InputProps={{
+                                ...props.InputProps,
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <IconButton
+                                            edge="end"
+                                            onClick={moveCursorToCents}
+                                            size="small"
+                                        >
+                                            <ArrowForwardIcon />
+                                        </IconButton>
+                                    </InputAdornment>
+                                ),
+                            }}
+                            ref={priceInputRef}
+                        />
+                    )}
                     margin="dense"
                     name="price"
                     label="Preço"
@@ -148,23 +243,8 @@ const ProductEditDialog = ({ open, onClose, product, onSave, businessType }) => 
                     decimalScale={2}
                     fixedDecimalScale
                     allowNegative={false}
-                    isNumericString
                     error={!!errors.price}
                     helperText={errors.price}
-                    InputProps={{
-                        endAdornment: (
-                            <InputAdornment position="end">
-                                <IconButton
-                                    edge="end"
-                                    onClick={moveCursorToCents}
-                                    size="small"
-                                >
-                                    <ArrowForwardIcon />
-                                </IconButton>
-                            </InputAdornment>
-                        ),
-                    }}
-                    ref={priceInputRef}
                 />
                 <TextField
                     margin="dense"
@@ -197,8 +277,8 @@ const ProductEditDialog = ({ open, onClose, product, onSave, businessType }) => 
             </DialogContent>
             <DialogActions>
                 <Button onClick={onClose}>Cancelar</Button>
-                <Button onClick={handleSave} color="primary">
-                    Salvar
+                <Button onClick={handleSave} color="primary" disabled={loading}>
+                    {loading ? <CircularProgress size={24} /> : 'Salvar'}
                 </Button>
             </DialogActions>
         </Dialog>
