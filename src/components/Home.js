@@ -357,6 +357,7 @@ const Home = () => {
                                     margin="normal"
                                     inputRef={produtoInputRef}
                                     onKeyDown={handleKeyDown}
+                                    fullWidth
                                 />
                             )}
                             value={produtoSelecionado}
@@ -371,7 +372,7 @@ const Home = () => {
                         />
 
                         <TextField
-                            type="text"
+                            type={isMobile ? "number" : "text"} // Altera para "number" em dispositivos móveis
                             fullWidth
                             label="Quantidade"
                             value={quantidade}
@@ -382,16 +383,18 @@ const Home = () => {
                             onKeyDown={handleKeyDown}
                             InputProps={{
                                 endAdornment: <InputAdornment position="end">{getUnidadeMedida()}</InputAdornment>,
+                                inputMode: isMobile ? "decimal" : "text", // Garante teclado numérico em dispositivos móveis
+                                pattern: isMobile ? "[0-9]*" : undefined, // Permite apenas números em dispositivos móveis
                             }}
                         />
+
                         <Button
                             variant="contained"
                             color="primary"
                             onClick={adicionarAoCarrinho}
-                            disabled={!produtoSelecionado}
-                            startIcon={<AddShoppingCartIcon />}
+                            disabled={!produtoSelecionado || !quantidade}
                             fullWidth
-                            sx={{ mb: 2 }}
+                            sx={{ mt: 2 }}
                         >
                             Adicionar ao Carrinho
                         </Button>
@@ -515,7 +518,7 @@ const Home = () => {
     };
 
     return (
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: isMobile ? 1 : 2 }}> {/* Reduz o padding em dispositivos móveis */}
             <Typography variant={isMobile ? "h5" : "h4"} align="center" gutterBottom>
                 Frente de Caixa
             </Typography>
@@ -538,33 +541,36 @@ const Home = () => {
                 </CardContent>
             </Card>
 
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, pt: 2, justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'row', pt: 2, justifyContent: 'space-between' }}>
                 <Button
                     color="error"
                     onClick={cancelarVenda}
                     startIcon={<CancelIcon />}
                     variant="contained"
                     disabled={carrinho.length === 0}
-                    sx={{ mb: { xs: 2, md: 0 } }}
+                    fullWidth={isMobile} // Botão de largura total em dispositivos móveis
+                    sx={{ mb: isMobile ? 1 : 0 }} // Adiciona margem inferior em dispositivos móveis
                 >
                     Cancelar Venda
                 </Button>
-                <Box sx={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Button
-                        color="inherit"
-                        disabled={activeStep === 0}
-                        onClick={handleBack}
-                        sx={{ mr: 1 }}
-                    >
-                        Voltar
-                    </Button>
-                    <Button 
-                        onClick={handleNext} 
-                        disabled={activeStep === steps.length - 1 || carrinho.length === 0}
-                    >
-                        Próximo
-                    </Button>
-                </Box>
+                {!isMobile && ( // Esconde os botões de navegação em dispositivos móveis
+                    <Box>
+                        <Button
+                            color="inherit"
+                            disabled={activeStep === 0}
+                            onClick={handleBack}
+                            sx={{ mr: 1 }}
+                        >
+                            Voltar
+                        </Button>
+                        <Button 
+                            onClick={handleNext} 
+                            disabled={activeStep === steps.length - 1 || carrinho.length === 0}
+                        >
+                            Próximo
+                        </Button>
+                    </Box>
+                )}
             </Box>
 
             <Divider sx={{ my: 2 }} />
