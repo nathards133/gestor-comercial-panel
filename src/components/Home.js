@@ -15,6 +15,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import PaymentIcon from '@mui/icons-material/Payment';
 import InfoIcon from '@mui/icons-material/Info';
+import CancelIcon from '@mui/icons-material/Cancel';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import PaymentNotificationList from './PaymentNotificationList';
@@ -319,6 +320,22 @@ const Home = () => {
         }
     };
 
+    const cancelarVenda = useCallback(() => {
+        setSnackbar({
+            open: true,
+            message: 'Venda cancelada com sucesso.',
+            severity: 'info'
+        });
+        setCarrinho([]);
+        setProdutoSelecionado(null);
+        setQuantidade('');
+        setPaymentMethod('');
+        setActiveStep(0);
+        if (produtoInputRef.current) {
+            produtoInputRef.current.focus();
+        }
+    }, []);
+
     const renderStepContent = (step) => {
         switch (step) {
             case 0:
@@ -507,7 +524,7 @@ const Home = () => {
                 Bem-vindo ao sistema de Frente de Caixa. Siga os passos abaixo para realizar uma venda.
             </Alert>
 
-            <Stepper  activeStep={activeStep} alternativeLabel>
+            <Stepper activeStep={activeStep} alternativeLabel>
                 {steps.map((label) => (
                     <Step key={label}>
                         <StepLabel>{label}</StepLabel>
@@ -521,19 +538,33 @@ const Home = () => {
                 </CardContent>
             </Card>
 
-            <Box sx={{ display: 'flex', flexDirection: 'row', pt: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, pt: 2, justifyContent: 'space-between' }}>
                 <Button
-                    color="inherit"
-                    disabled={activeStep === 0}
-                    onClick={handleBack}
-                    sx={{ mr: 1 }}
+                    color="error"
+                    onClick={cancelarVenda}
+                    startIcon={<CancelIcon />}
+                    variant="contained"
+                    disabled={carrinho.length === 0}
+                    sx={{ mb: { xs: 2, md: 0 } }}
                 >
-                    Voltar
+                    Cancelar Venda
                 </Button>
-                <Box sx={{ flex: '1 1 auto' }} />
-                <Button onClick={handleNext} disabled={activeStep === steps.length - 1}>
-                    Próximo
-                </Button>
+                <Box sx={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Button
+                        color="inherit"
+                        disabled={activeStep === 0}
+                        onClick={handleBack}
+                        sx={{ mr: 1 }}
+                    >
+                        Voltar
+                    </Button>
+                    <Button 
+                        onClick={handleNext} 
+                        disabled={activeStep === steps.length - 1 || carrinho.length === 0}
+                    >
+                        Próximo
+                    </Button>
+                </Box>
             </Box>
 
             <Divider sx={{ my: 2 }} />

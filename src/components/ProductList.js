@@ -35,12 +35,12 @@ import {
     Divider
 } from '@mui/material';
 import { NumericFormat } from 'react-number-format';
-import { 
-    ArrowForward as ArrowForwardIcon, 
-    Search as SearchIcon, 
-    Archive as ArchiveIcon, 
+import {
+    ArrowForward as ArrowForwardIcon,
+    Search as SearchIcon,
+    Archive as ArchiveIcon,
     Unarchive as UnarchiveIcon,
-    Edit as EditIcon, 
+    Edit as EditIcon,
     Inventory as InventoryIcon
 } from '@mui/icons-material';
 import ProductImport from './ProductImport';
@@ -81,7 +81,7 @@ const ProductList = () => {
 
     useEffect(() => {
         fetchProducts();
-    }, []);
+    }, [showArchived]);
 
     useEffect(() => {
         // Pré-seleciona a unidade com base no tipo de negócio
@@ -96,7 +96,7 @@ const ProductList = () => {
 
     const fetchProducts = async () => {
         try {
-            const res = await axios.get(`${apiUrl}/api/products`);
+            const res = await axios.get(`${apiUrl}/api/products?showArchived=${showArchived}`);
             if (res.data && Array.isArray(res.data.products)) {
                 setProducts(res.data.products);
                 setPagination({
@@ -104,6 +104,16 @@ const ProductList = () => {
                     totalPages: res.data.totalPages,
                     totalItems: res.data.totalItems
                 });
+
+                // Verifica se não há produtos arquivados e redireciona para ativos
+                if (showArchived && res.data.products.length === 0) {
+                    setShowArchived(false);
+                    setSnackbar({
+                        open: true,
+                        message: 'Não há produtos arquivados. Mostrando produtos ativos.',
+                        severity: 'info'
+                    });
+                }
             } else {
                 console.error('A resposta da API não contém um array de produtos:', res.data);
                 setProducts([]);
@@ -256,7 +266,7 @@ const ProductList = () => {
     const renderBusinessTypeWarning = () => {
         if (user.businessType === 'Açougue') {
             return (
-                <WarningMessage 
+                <WarningMessage
                     title="Atenção Açougues"
                     message="A quantidade inserida deve representar o total do estoque em quilogramas (kg)."
                     severity="info"
@@ -282,23 +292,43 @@ const ProductList = () => {
 
     const handleArchiveProduct = async (productId) => {
         try {
-            await axios.patch(`${apiUrl}/api/products/${productId}/archive`);
+            await axios.patch(`${apiUrl}/api/products?id=${productId}`, { action: true });
             fetchProducts();
+            setSnackbar({
+                open: true,
+                message: 'Produto arquivado com sucesso!',
+                severity: 'success'
+            });
         } catch (error) {
             console.error('Erro ao arquivar produto:', error);
+            setSnackbar({
+                open: true,
+                message: 'Erro ao arquivar produto. Por favor, tente novamente.',
+                severity: 'error'
+            });
         }
     };
 
     const handleUnarchiveProduct = async (productId) => {
         try {
-            await axios.patch(`${apiUrl}/api/products/${productId}/unarchive`);
+            await axios.patch(`${apiUrl}/api/products?id=${productId}`, { action: false });
             fetchProducts();
+            setSnackbar({
+                open: true,
+                message: 'Produto desarquivado com sucesso!',
+                severity: 'success'
+            });
         } catch (error) {
             console.error('Erro ao desarquivar produto:', error);
+            setSnackbar({
+                open: true,
+                message: 'Erro ao desarquivar produto. Por favor, tente novamente.',
+                severity: 'error'
+            });
         }
     };
 
-    const filteredProducts = products.filter(product => 
+    const filteredProducts = products.filter(product =>
         (showArchived ? product.archived : !product.archived) &&
         product.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -316,15 +346,15 @@ const ProductList = () => {
                     Quantidade: {product.quantity} {product.unit}
                 </Typography>
                 <Box mt={2}>
-                    <Chip 
-                        label={product.archived ? "Arquivado" : "Ativo"} 
-                        color={product.archived ? "default" : "primary"} 
-                        size="small" 
+                    <Chip
+                        label={product.archived ? "Arquivado" : "Ativo"}
+                        color={product.archived ? "default" : "primary"}
+                        size="small"
                     />
                 </Box>
             </CardContent>
             <Box sx={{ p: 2, pt: 0 }}>
-                <Button 
+                <Button
                     startIcon={<EditIcon />}
                     onClick={() => handleEditProduct(product)}
                     fullWidth
@@ -413,9 +443,9 @@ const ProductList = () => {
                     >
                         {showArchived ? 'Mostrar Ativos' : 'Mostrar Arquivados'}
                     </Button>
-                    <Button 
-                        variant="contained" 
-                        color="primary" 
+                    <Button
+                        variant="contained"
+                        color="primary"
                         onClick={handleOpenDialog}
                         fullWidth={isMobile}
                     >

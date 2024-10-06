@@ -14,6 +14,7 @@ import {
     TableContainer,
     TableHead,
     TableRow,
+    TablePagination,
     Paper,
     useMediaQuery,
     useTheme,
@@ -21,12 +22,15 @@ import {
     Button,
     CircularProgress,
     Skeleton,
-    Container
+    Container,
+    IconButton
 } from '@mui/material';
 import WarningMessage from './WarningMessage';
 import PaymentNotificationList from './PaymentNotificationList';
 import PasswordModal from './PasswordModal';
 import { useNavigate } from 'react-router-dom';
+import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
+import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 
 const SalesPage = () => {
     const [sales, setSales] = useState([]);
@@ -44,6 +48,8 @@ const SalesPage = () => {
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(true); 
     const [isContentVisible, setIsContentVisible] = useState(true); // ativa e desativa o conteudo do painel
     const navigate = useNavigate();
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
 
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -237,9 +243,63 @@ const SalesPage = () => {
         </Container>
     );
 
+    const handleChangePage = (event, newPage) => {
+        setPage(newPage);
+    };
+
+    const handleChangeRowsPerPage = (event) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(0);
+    };
+
+    const paginatedSales = useMemo(() => {
+        return sales.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+    }, [sales, page, rowsPerPage]);
+
+    const renderMobileSaleCard = (sale) => (
+        <Card key={sale._id} sx={{ mb: 2 }}>
+            <CardContent>
+                <Typography variant="subtitle2" color="text.secondary">
+                    {new Date(sale.createdAt).toLocaleString()}
+                </Typography>
+                <Typography variant="body2">{renderSaleItems(sale)}</Typography>
+                <Typography variant="h6" sx={{ mt: 1 }}>
+                    Total: R$ {sale.totalValue?.toFixed(2) || '0.00'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                    Pagamento: {sale.paymentMethod || 'Não especificado'}
+                </Typography>
+            </CardContent>
+        </Card>
+    );
+
+    const renderMobilePagination = () => (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
+            <Typography variant="body2">
+                {`${page * rowsPerPage + 1}-${Math.min((page + 1) * rowsPerPage, sales.length)} de ${sales.length}`}
+            </Typography>
+            <Box>
+                <IconButton 
+                    onClick={() => handleChangePage(null, page - 1)} 
+                    disabled={page === 0}
+                    size="small"
+                >
+                    <ArrowBackIosNewIcon fontSize="small" />
+                </IconButton>
+                <IconButton 
+                    onClick={() => handleChangePage(null, page + 1)} 
+                    disabled={page >= Math.ceil(sales.length / rowsPerPage) - 1}
+                    size="small"
+                >
+                    <ArrowForwardIosIcon fontSize="small" />
+                </IconButton>
+            </Box>
+        </Box>
+    );
+
     return (
         <Box sx={{ p: 2 }}>
-{/*             
+            {/*             
             <PasswordModal
                 open={isPasswordModalOpen}
                 onClose={handlePasswordModalClose}
@@ -302,45 +362,43 @@ const SalesPage = () => {
                     {renderPeriodWarning()}
                     {renderNewUserWarning()}
 
-                    <TableContainer component={Paper} sx={{ mt: 2, overflowX: 'auto' }}>
-                        <Table size={isMobile ? "small" : "medium"}>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Data</TableCell>
-                                    <TableCell>Produtos</TableCell>
-                                    <TableCell align="right">Valor Total</TableCell>
-                                    <TableCell>Método de Pagamento</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {sales && sales.length > 0 ? (
-                                    sales.map((sale) => (
+                    {isMobile ? (
+                        <>
+                            {paginatedSales.map(renderMobileSaleCard)}
+                            {renderMobilePagination()}
+                        </>
+                    ) : (
+                        <TableContainer component={Paper} sx={{ mt: 2, overflowX: 'auto' }}>
+                            <Table size="medium">
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell>Data</TableCell>
+                                        <TableCell>Produtos</TableCell>
+                                        <TableCell align="right">Valor Total</TableCell>
+                                        <TableCell>Método de Pagamento</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {paginatedSales.map((sale) => (
                                         <TableRow key={sale._id}>
                                             <TableCell>{new Date(sale.createdAt).toLocaleString()}</TableCell>
                                             <TableCell>{renderSaleItems(sale)}</TableCell>
                                             <TableCell align="right">R$ {sale.totalValue?.toFixed(2) || '0.00'}</TableCell>
                                             <TableCell>{sale.paymentMethod || 'Não especificado'}</TableCell>
                                         </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow>
-                                        <TableCell colSpan={4} align="center">Nenhuma venda encontrada</TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-
-                    {pagination && pagination.currentPage < pagination.totalPages && (
-                        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-                            <Button 
-                                variant="contained" 
-                                onClick={handleLoadMore}
-                                disabled={loading}
-                            >
-                                {loading ? <CircularProgress size={24} /> : 'Carregar Mais'}
-                            </Button>
-                        </Box>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                            <TablePagination
+                                component="div"
+                                count={sales.length}
+                                page={page}
+                                onPageChange={handleChangePage}
+                                rowsPerPage={rowsPerPage}
+                                onRowsPerPageChange={handleChangeRowsPerPage}
+                                labelRowsPerPage="Linhas por página:"
+                            />
+                        </TableContainer>
                     )}
 
                     <Typography variant={isMobile ? "subtitle1" : "h6"} sx={{ mt: 4, mb: 2 }}>Estatísticas de Produtos</Typography>
