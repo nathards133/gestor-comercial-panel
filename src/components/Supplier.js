@@ -3,9 +3,10 @@ import axios from 'axios';
 import {
   Typography, Box, TextField, Button, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle,
-  DialogContent, DialogActions, IconButton, Autocomplete, Chip
+  DialogContent, DialogActions, IconButton, Autocomplete, Chip, Tooltip, InputAdornment,
+  useMediaQuery, useTheme, Card, CardContent, Grid, Divider
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, WhatsApp as WhatsAppIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, WhatsApp as WhatsAppIcon, Search as SearchIcon, Add as AddIcon } from '@mui/icons-material';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -18,6 +19,10 @@ const SupplierManagement = () => {
     address: { street: '', number: '', complement: '', city: '', state: '', zipCode: '' },
     suppliedProducts: []
   });
+  const [searchProduct, setSearchProduct] = useState('');
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
     fetchSuppliers();
@@ -92,61 +97,124 @@ const SupplierManagement = () => {
     return `https://wa.me/${cleanPhone}`;
   };
 
-  return (
-    <Box>
-      <Typography variant="h4" gutterBottom>Gestão de Fornecedores</Typography>
-      
-      <Button variant="contained" color="primary" onClick={() => {
-        setCurrentSupplier({
-          name: '', cnpj: '', email: '', phone: '',
-          address: { street: '', number: '', complement: '', city: '', state: '', zipCode: '' },
-          suppliedProducts: []
-        });
-        setOpenDialog(true);
-      }} sx={{ mb: 2 }}>
-        Adicionar Fornecedor
-      </Button>
+  const filteredSuppliers = suppliers.filter(supplier =>
+    supplier.suppliedProducts.some(product =>
+      product.name.toLowerCase().includes(searchProduct.toLowerCase())
+    )
+  );
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nome</TableCell>
-              <TableCell>CNPJ</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell>Telefone</TableCell>
-              <TableCell>Produtos Fornecidos</TableCell>
-              <TableCell>Ações</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {suppliers.map((supplier) => (
-              <TableRow key={supplier._id}>
-                <TableCell>{supplier.name}</TableCell>
-                <TableCell>{supplier.cnpj}</TableCell>
-                <TableCell>{supplier.email}</TableCell>
-                <TableCell>{supplier.phone}</TableCell>
-                <TableCell>
-                  {supplier.suppliedProducts.map(product => (
-                    <Chip key={product._id} label={product.name} size="small" sx={{ m: 0.5 }} />
-                  ))}
-                </TableCell>
-                <TableCell>
-                  <IconButton onClick={() => handleEdit(supplier)}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton onClick={() => handleDelete(supplier._id)}>
-                    <DeleteIcon />
-                  </IconButton>
-                  <IconButton href={getWhatsAppLink(supplier.phone)} target="_blank">
-                    <WhatsAppIcon />
-                  </IconButton>
-                </TableCell>
+  const renderSupplierCard = (supplier) => (
+    <Card key={supplier._id} sx={{ mb: 2 }}>
+      <CardContent>
+        <Typography variant="h6" component="div">{supplier.name}</Typography>
+        <Typography color="text.secondary" gutterBottom>CNPJ: {supplier.cnpj}</Typography>
+        <Typography variant="body2">Email: {supplier.email}</Typography>
+        <Typography variant="body2">Telefone: {supplier.phone}</Typography>
+        <Tooltip title={supplier.suppliedProducts.map(p => p.name).join(', ')}>
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            Produtos fornecidos: {supplier.suppliedProducts.length}
+          </Typography>
+        </Tooltip>
+        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
+          <IconButton onClick={() => handleEdit(supplier)}>
+            <EditIcon />
+          </IconButton>
+          <IconButton onClick={() => handleDelete(supplier._id)}>
+            <DeleteIcon />
+          </IconButton>
+          <IconButton href={getWhatsAppLink(supplier.phone)} target="_blank">
+            <WhatsAppIcon />
+          </IconButton>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <Box sx={{ p: 2 }}>
+      <Typography variant={isMobile ? "h5" : "h4"} gutterBottom align="center">
+        Gestão de Fornecedores
+      </Typography>
+      
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', flexDirection: isMobile ? 'column' : 'row' }}>
+        <TextField
+          variant="outlined"
+          placeholder="Buscar fornecedor por produto"
+          value={searchProduct}
+          onChange={(e) => setSearchProduct(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }}
+          sx={{ mb: isMobile ? 2 : 0, flexGrow: 1, mr: isMobile ? 0 : 2 }}
+        />
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => {
+            setCurrentSupplier({
+              name: '', cnpj: '', email: '', phone: '',
+              address: { street: '', number: '', complement: '', city: '', state: '', zipCode: '' },
+              suppliedProducts: []
+            });
+            setOpenDialog(true);
+          }}
+          startIcon={<AddIcon />}
+          fullWidth={isMobile}
+        >
+          Adicionar Fornecedor
+        </Button>
+      </Box>
+
+      {isMobile ? (
+        filteredSuppliers.map(renderSupplierCard)
+      ) : (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Nome</TableCell>
+                <TableCell>CNPJ</TableCell>
+                <TableCell>Email</TableCell>
+                <TableCell>Telefone</TableCell>
+                <TableCell>Produtos Fornecidos</TableCell>
+                <TableCell>Ações</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {filteredSuppliers.map((supplier) => (
+                <TableRow key={supplier._id}>
+                  <TableCell>{supplier.name}</TableCell>
+                  <TableCell>{supplier.cnpj}</TableCell>
+                  <TableCell>{supplier.email}</TableCell>
+                  <TableCell>{supplier.phone}</TableCell>
+                  <TableCell>
+                    <Tooltip title={supplier.suppliedProducts.map(p => p.name).join(', ')}>
+                      <Typography>
+                        {supplier.suppliedProducts.length} produto(s)
+                      </Typography>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell>
+                    <IconButton onClick={() => handleEdit(supplier)}>
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton onClick={() => handleDelete(supplier._id)}>
+                      <DeleteIcon />
+                    </IconButton>
+                    <IconButton href={getWhatsAppLink(supplier.phone)} target="_blank">
+                      <WhatsAppIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
         <DialogTitle>{currentSupplier._id ? 'Editar Fornecedor' : 'Adicionar Fornecedor'}</DialogTitle>

@@ -13,7 +13,7 @@ import SupplierManagement from './components/Supplier';
 import Login from './components/Login';
 import ReportsPage from './components/ReportsPage';
 import Integrations from './components/Integrations';
-
+import AccountsPayable from './components/AccountsPayable';
 const lightTheme = createTheme({
   palette: {
     mode: 'light',
@@ -81,6 +81,7 @@ function App() {
               <Route path="suppliers" element={<SupplierManagement />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="integrations" element={<Integrations />} />
+              <Route path="accounts-payable" element={<AccountsPayable />} />
             </Route>
           </Routes>
         </Router>

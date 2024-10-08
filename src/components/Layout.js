@@ -19,7 +19,6 @@ import {
   MenuItem
 } from '@mui/material';
 import { 
-  Home, 
   ShoppingCart, 
   Assessment, 
   Menu as MenuIcon, 
@@ -32,7 +31,8 @@ import {
   Brightness7 as Brightness7Icon,
   AccountCircle,
   ExitToApp,
-  AttachMoney
+  AttachMoney,
+  RequestPage
 } from '@mui/icons-material';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -46,6 +46,7 @@ const menuItems = [
   { text: 'Vendas', icon: <AttachMoney />, path: '/sales' },
   { text: 'Relatórios', icon: <Assessment />, path: '/reports' },
   { text: 'Fornecedores', icon: <Store />, path: '/suppliers' },
+  { text: 'Contas a Pagar', icon: <RequestPage />, path: '/accounts-payable' },
   { text: 'Integrações', icon: <Settings />, path: '/integrations' },
 ];
 
@@ -55,7 +56,7 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [open, setOpen] = useState(!isMobile);
-  const [notifications, setNotifications] = useState([]);
+  const [notifications] = useState([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);

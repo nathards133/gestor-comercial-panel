@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
+import { startOfDay, startOfWeek, startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import {
     Box,
     Typography,
@@ -23,7 +25,8 @@ import {
     CircularProgress,
     Skeleton,
     Container,
-    IconButton
+    IconButton,
+    Snackbar
 } from '@mui/material';
 import WarningMessage from './WarningMessage';
 import PaymentNotificationList from './PaymentNotificationList';
@@ -45,51 +48,82 @@ const SalesPage = () => {
     const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1 });
     const [loading, setLoading] = useState(false);
     const [notifications, setNotifications] = useState([]);
+    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(true); 
     const [isContentVisible, setIsContentVisible] = useState(true); // ativa e desativa o conteudo do painel
     const navigate = useNavigate();
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [currentDate, setCurrentDate] = useState(new Date()); 
 
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-    const fetchSales = useCallback(async (period, page = 1) => {
-        const cacheKey = `${period}_${page}`;
-        if (cachedData[cacheKey]) {
-            setSales(cachedData[cacheKey].sales || []);
-            setPeriodInfo(cachedData[cacheKey].period);
-            setPagination(cachedData[cacheKey].pagination || { currentPage: page, totalPages: page });
-            return;
-        }
-
+    const fetchSales = useCallback(async (period) => {
         setLoading(true);
         try {
-            const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sales/${period}?page=${page}`);
-            console.log('API Response:', response.data);
-            const newSales = Array.isArray(response.data.sales) ? response.data.sales : [];
-            setSales(prevSales => page === 1 ? newSales : [...prevSales, ...newSales]);
-            setPeriodInfo(response.data.period || null);
-            setPagination({
-                currentPage: response.data.currentPage || page,
-                totalPages: response.data.totalPages || page
+            let startDate, endDate;
+            const now = new Date();
+
+            switch (period) {
+                case 'day':
+                    startDate = startOfDay(now);
+                    endDate = now;
+                    break;
+                case 'week':
+                    startDate = startOfWeek(now, { weekStartsOn: 1 }); // 1 representa segunda-feira
+                    endDate = now;
+                    break;
+                case 'month':
+                    const lastMonth = subMonths(now, 1);
+                    startDate = startOfMonth(lastMonth);
+                    endDate = endOfMonth(lastMonth);
+                    break;
+                default:
+                    throw new Error('Período inválido');
+            }
+
+            const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sales`, {
+                params: {
+                    startDate: startDate.toISOString(),
+                    endDate: endDate.toISOString(),
+                    period: period
+                }
             });
-            setCachedData(prev => ({ 
-                ...prev, 
-                [cacheKey]: { 
-                    sales: newSales, 
-                    period: response.data.period || null,
-                    pagination: response.data.pagination || { currentPage: page, totalPages: page },
-                    isNewUser: response.data.isNewUser
-                } 
-            }));
+
+            const newSales = Array.isArray(response.data.sales) ? response.data.sales : [];
+            setSales(newSales);
+            setPeriodInfo({
+                start: startDate,
+                end: endDate,
+                period: period
+            });
+
+            // Buscar estatísticas de produtos para o período
+            const statsResponse = await axios.get(`${process.env.REACT_APP_API_URL}/api/sales/stats`, {
+                params: {
+                    startDate: startDate.toISOString(),
+                    endDate: endDate.toISOString()
+                }
+            });
+
+            setStats(statsResponse.data);
+
+            if (newSales.length === 0 && period === 'month') {
+                setSnackbar({
+                    open: true,
+                    message: `Não foram feitas vendas em ${format(startDate, 'MMMM', { locale: ptBR })}`,
+                    severity: 'info'
+                });
+            }
         } catch (error) {
             console.error('Erro ao buscar vendas:', error);
             setSales([]);
+            setStats({ productStats: [] });
         } finally {
             setLoading(false);
         }
-    }, [cachedData]);
+    }, []);
 
     const fetchStats = useCallback(async () => {
         const now = new Date();
@@ -111,10 +145,8 @@ const SalesPage = () => {
     }, []);
 
     useEffect(() => {
-        const periods = ['day', 'week', 'month'];
-        setSales([]); // Limpa as vendas antes de buscar novas
-        fetchSales(periods[tabValue], 1); // Sempre busca a primeira página ao mudar de período
-    }, [tabValue, fetchSales]);
+        fetchSales('day'); // Inicialmente, carrega as vendas do dia
+    }, [fetchSales]);
 
     useEffect(() => {
         fetchStats();
@@ -168,6 +200,8 @@ const SalesPage = () => {
 
     const handleTabChange = (event, newValue) => {
         setTabValue(newValue);
+        const periods = ['day', 'week', 'month'];
+        fetchSales(periods[newValue]);
     };
 
     const handleLoadMore = () => {
@@ -309,11 +343,13 @@ const SalesPage = () => {
              */}
             {isContentVisible ? (
                 <>
-                    <Typography variant={isMobile ? "h5" : "h4"} gutterBottom>
+                    <Typography variant={isMobile ? "h5" : "h4"} gutterBottom align="center">
                         Vendas
                     </Typography>
 
-                    <PaymentNotificationList notifications={notifications} />
+                    <Alert severity="info" align="center" sx={{ mb: 2 }}>
+                    Esta página é destinada ao administrador do sistema, oferecendo uma visão geral do desempenho do seu negócio. Para garantir uma análise precisa e confiável, mantenha o sistema sempre atualizado. Assim, você poderá identificar oportunidades e aprimorar continuamente os resultados.
+                    </Alert>
 
                     <Grid container spacing={2} sx={{ mb: 3 }}>
                         <Grid item xs={12} sm={4}>
@@ -359,6 +395,14 @@ const SalesPage = () => {
                         <Tab label="Mês" />
                     </Tabs>
 
+                    {periodInfo && (
+                        <Typography variant="subtitle1" align="center" sx={{ mt: 2, mb: 2 }}>
+                            {periodInfo.period === 'day' && 'Vendas de hoje'}
+                            {periodInfo.period === 'week' && `Vendas desta semana (${format(periodInfo.start, 'dd/MM')} - ${format(periodInfo.end, 'dd/MM')})`}
+                            {periodInfo.period === 'month' && `Vendas de ${format(periodInfo.start, 'MMMM', { locale: ptBR })}`}
+                        </Typography>
+                    )}
+
                     {renderPeriodWarning()}
                     {renderNewUserWarning()}
 
@@ -401,9 +445,11 @@ const SalesPage = () => {
                         </TableContainer>
                     )}
 
-                    <Typography variant={isMobile ? "subtitle1" : "h6"} sx={{ mt: 4, mb: 2 }}>Estatísticas de Produtos</Typography>
+                    {/* <Typography variant={isMobile ? "subtitle1" : "h6"} sx={{ mt: 4, mb: 2, textAlign: 'center' }}>
+                        Estatísticas de Produtos
+                    </Typography> */}
                     <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-                        <Table size={isMobile ? "small" : "medium"}>
+                        {/* <Table size={isMobile ? "small" : "medium"}>
                             <TableHead>
                                 <TableRow>
                                     <TableCell>Produto</TableCell>
@@ -426,7 +472,7 @@ const SalesPage = () => {
                                 </TableRow>
                             )}
                             </TableBody>
-                        </Table>
+                        </Table> */}
                     </TableContainer>
                 </>
             ) : (
