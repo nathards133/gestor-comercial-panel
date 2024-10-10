@@ -29,7 +29,7 @@ const Home = () => {
     const produtoInputRef = useRef(null);
     const quantidadeInputRef = useRef(null);
     const finalizarVendaButtonRef = useRef(null);
-    // const [inputValue, setInputValue] = useState('');    
+    const [inputValue, setInputValue] = useState('');
     const { user } = useAuth();
     const [notifications, setNotifications] = useState([]);
     const [paymentMethod, setPaymentMethod] = useState('');
@@ -171,8 +171,23 @@ const Home = () => {
                 : parseInt(quantidade, 10);
             
             if (isNaN(quantidadeNumerica) || quantidadeNumerica <= 0) {
-                alert('Por favor, insira uma quantidade válida.');
+                setSnackbar({
+                    open: true,
+                    message: 'Por favor, insira uma quantidade válida.',
+                    severity: 'error'
+                });
                 return;
+            }
+            
+            // Verifica se a quantidade desejada está disponível no estoque
+            if (quantidadeNumerica > produtoSelecionado.quantity) {
+                setSnackbar({
+                    open: true,
+                    message: `Atenção: Estoque insuficiente. Disponível: ${produtoSelecionado.quantity} ${produtoSelecionado.unit}`,
+                    severity: 'warning'
+                });
+                // Permite que a venda continue, mas com a quantidade disponível
+                quantidadeNumerica = produtoSelecionado.quantity;
             }
             
             setCarrinho(prevCarrinho => [...prevCarrinho, { 
@@ -181,11 +196,12 @@ const Home = () => {
             }]);
             setProdutoSelecionado(null);
             setQuantidade('');
+            setInputValue('');
             if (produtoInputRef.current) {
                 produtoInputRef.current.focus();
             }
         }
-    }, [produtoSelecionado, quantidade]);
+    }, [produtoSelecionado, quantidade, setSnackbar]);
 
     const handleKeyDown = useCallback((e) => {
         if (e.key === 'Enter') {
@@ -241,20 +257,22 @@ const Home = () => {
     }, [carrinho, paymentMethod, apiUrl, updateTopSellingProducts]);
 
     const handleAutocompleteChange = useCallback((event, newValue) => {
-        setProdutoSelecionado(newValue); // Atualiza o produto selecionado
+        setProdutoSelecionado(newValue);
         if (newValue) {
-            setQuantidade(''); // Limpa a quantidade ao selecionar um novo produto
+            setQuantidade('');
             if (quantidadeInputRef.current) {
-                quantidadeInputRef.current.focus(); // Foca na quantidade
+                quantidadeInputRef.current.focus();
             }
         }
     }, []);
 
     const handleInputChange = useCallback((event, newInputValue) => {
+        setInputValue(newInputValue);
         if (newInputValue === '') {
-            setProdutoSelecionado(null); // Limpa a seleção se o input estiver vazio
+            setProdutoSelecionado(null);
         }
     }, []);
+
     const handleQuantidadeChange = (event) => {
         let value = event.target.value;
         if (produtoSelecionado && produtoSelecionado.unit === 'kg') {
@@ -349,7 +367,6 @@ const Home = () => {
                                 if (typeof option === 'string') return option;
                                 return option.name ? `${option.name} - R$ ${option.price.toFixed(2)} / ${option.unit}` : '';
                             }}
-                            getOptionSelected={(option, value) => option._id === value._id}
                             renderInput={(params) => (
                                 <TextField
                                     {...params}
@@ -363,6 +380,7 @@ const Home = () => {
                             value={produtoSelecionado}
                             onChange={handleAutocompleteChange}
                             onInputChange={handleInputChange}
+                            inputValue={inputValue}
                             isOptionEqualToValue={(option, value) => option._id === value._id}
                             fullWidth
                             freeSolo
@@ -484,12 +502,13 @@ const Home = () => {
                             <InputLabel id="payment-method-label">Método de Pagamento</InputLabel>
                             <Select
                                 labelId="payment-method-label"
-                                value={paymentMethod}
+                                value={paymentMethod || ''}
                                 onChange={handlePaymentMethodChange}
                                 onKeyDown={handlePaymentMethodKeyDown}
                                 label="Método de Pagamento"
                                 inputRef={paymentMethodRef}
                             >
+                                <MenuItem value="">Selecione um método</MenuItem>
                                 <MenuItem value="dinheiro">Dinheiro</MenuItem>
                                 <MenuItem value="cartao_credito">Cartão de Crédito</MenuItem>
                                 <MenuItem value="cartao_debito">Cartão de Débito</MenuItem>
