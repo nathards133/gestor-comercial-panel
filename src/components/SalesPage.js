@@ -50,7 +50,7 @@ const SalesPage = () => {
     const [notifications, setNotifications] = useState([]);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(true); 
-    const [isContentVisible, setIsContentVisible] = useState(true); // ativa e desativa o conteudo do painel
+    const [isContentVisible, setIsContentVisible] = useState(false); // ativa e desativa o conteudo do painel
     const navigate = useNavigate();
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -333,14 +333,15 @@ const SalesPage = () => {
 
     return (
         <Box sx={{ p: 2 }}>
-            {/*             
+                        
             <PasswordModal
                 open={isPasswordModalOpen}
                 onClose={handlePasswordModalClose}
                 onSubmit={handlePasswordSubmit}
                 title="Digite a senha para acessar as vendas"
+                alert="Somente administradores podem acessar esta página."
             />
-             */}
+            
             {isContentVisible ? (
                 <>
                     <Typography variant={isMobile ? "h5" : "h4"} gutterBottom align="center">

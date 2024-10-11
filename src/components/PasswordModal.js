@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Alert } from '@mui/material';
 
-const PasswordModal = ({ open, onClose, onSubmit, title }) => {
+const PasswordModal = ({ open, onClose, onSubmit, title, alert }) => {
   const [password, setPassword] = useState('');
+  
 
   const handleSubmit = () => {
     onSubmit(password);
     setPassword('');
   };
 
+
+
   return (
     <Dialog open={open} onClose={onClose}>
       <DialogTitle>{title}</DialogTitle>
+      {alert && <Alert severity="info" sx={{ mb: 2 }}>{alert}</Alert>}
       <DialogContent>
         <TextField
           autoFocus
