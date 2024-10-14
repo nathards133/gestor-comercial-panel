@@ -16,6 +16,7 @@ import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import PaymentIcon from '@mui/icons-material/Payment';
 import InfoIcon from '@mui/icons-material/Info';
 import CancelIcon from '@mui/icons-material/Cancel';
+import BarcodeIcon from '@mui/icons-material/CropFree';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import PaymentNotificationList from './PaymentNotificationList';
@@ -36,6 +37,7 @@ const Home = () => {
     const [mostUsedPaymentMethod, setMostUsedPaymentMethod] = useState('');
     const [topSellingProducts, setTopSellingProducts] = useState([]);
     const paymentMethodRef = useRef(null);
+    const [barcodeInput, setBarcodeInput] = useState('');
 
     const apiUrl = process.env.REACT_APP_API_URL;
 
@@ -131,11 +133,11 @@ const Home = () => {
     }, [apiUrl]);
 
     useEffect(() => {
-        const storedMethod = localStorage.getItem('mostUsedPaymentMethod');
-        if (storedMethod) {
-            setMostUsedPaymentMethod(storedMethod); // Recupera o método armazenado
-            setPaymentMethod(storedMethod); // Define como método de pagamento atual
-        }
+        // const storedMethod = localStorage.getItem('mostUsedPaymentMethod');
+        // if (storedMethod) {
+        //     setMostUsedPaymentMethod(storedMethod); // Recupera o método armazenado
+        //     setPaymentMethod(storedMethod); // Define como método de pagamento atual
+        // }
     }, []);
 
     const removerDoCarrinho = useCallback((index) => {
@@ -354,276 +356,221 @@ const Home = () => {
         }
     }, []);
 
-    const renderStepContent = (step) => {
-        switch (step) {
-            case 0:
-                return (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>Adicionar Produtos ao Carrinho</Typography>
-                        <Autocomplete
-                            options={produtos || []}
-                            getOptionLabel={(option) => {
-                                if (!option) return '';
-                                if (typeof option === 'string') return option;
-                                return option.name ? `${option.name} - R$ ${option.price.toFixed(2)} / ${option.unit}` : '';
-                            }}
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    label="Produto"
-                                    margin="normal"
-                                    inputRef={produtoInputRef}
-                                    onKeyDown={handleKeyDown}
-                                    fullWidth
-                                />
-                            )}
-                            value={produtoSelecionado}
-                            onChange={handleAutocompleteChange}
-                            onInputChange={handleInputChange}
-                            inputValue={inputValue}
-                            isOptionEqualToValue={(option, value) => option._id === value._id}
-                            fullWidth
-                            freeSolo
-                            selectOnFocus
-                            clearOnBlur
-                            handleHomeEndKeys
-                        />
+    const handleBarcodeInputChange = (event) => {
+        setBarcodeInput(event.target.value);
+    };
 
-                        <TextField
-                            type={isMobile ? "number" : "text"} // Altera para "number" em dispositivos móveis
-                            fullWidth
-                            label="Quantidade"
-                            value={quantidade}
-                            onChange={handleQuantidadeChange}
-                            onFocus={handleQuantidadeFocus}
-                            margin="normal"
-                            inputRef={quantidadeInputRef}
-                            onKeyDown={handleKeyDown}
-                            InputProps={{
-                                endAdornment: <InputAdornment position="end">{getUnidadeMedida()}</InputAdornment>,
-                                inputMode: isMobile ? "decimal" : "text", // Garante teclado numérico em dispositivos móveis
-                                pattern: isMobile ? "[0-9]*" : undefined, // Permite apenas números em dispositivos móveis
-                            }}
-                        />
-
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            onClick={adicionarAoCarrinho}
-                            disabled={!produtoSelecionado || !quantidade}
-                            fullWidth
-                            sx={{ mt: 2 }}
-                        >
-                            Adicionar ao Carrinho
-                        </Button>
-                        
-                        {carrinho.length > 0 && (
-                            <Box>
-                                <Typography variant="h6" gutterBottom>Itens no Carrinho</Typography>
-                                <List>
-                                    {carrinho.map((item, index) => (
-                                        <ListItem key={index} 
-                                            secondaryAction={
-                                                <IconButton edge="end" aria-label="delete" onClick={() => removerDoCarrinho(index)}>
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            }
-                                            sx={{ 
-                                                bgcolor: 'background.paper', 
-                                                mb: 1, 
-                                                borderRadius: 1,
-                                                boxShadow: 1
-                                            }}
-                                        >
-                                            <ListItemText
-                                                primary={item.name}
-                                                secondary={`${formatarQuantidade(item.quantidade, item.unit)} x R$ ${item.price.toFixed(2)} = R$ ${(item.price * item.quantidade).toFixed(2)}`}
-                                            />
-                                        </ListItem>
-                                    ))}
-                                </List>
-                            </Box>
-                        )}
-                    </Box>
-                );
-            case 1:
-                return (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>Revisar Carrinho</Typography>
-                        <List onKeyDown={handleKeyDown}>
-                            {carrinho.map((item, index) => (
-                                <ListItem 
-                                    key={index} 
-                                    className="carrinho-item"
-                                    secondaryAction={
-                                        <IconButton 
-                                            edge="end" 
-                                            aria-label="delete" 
-                                            onClick={() => removerDoCarrinho(index) }
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    removerDoCarrinho(index);
-                                                }
-                                            }}
-                                            tabIndex={0}
-                                        >
-                                            <DeleteIcon />
-                                        </IconButton>
-                                    }
-                                    sx={{ 
-                                        bgcolor: 'background.paper', 
-                                        mb: 1, 
-                                        borderRadius: 1,
-                                        boxShadow: 1
-                                    }}
-                                >
-                                    <ListItemText
-                                        primary={item.name}
-                                        secondary={`${formatarQuantidade(item.quantidade, item.unit)} x R$ ${item.price.toFixed(2)} = R$ ${(item.price * item.quantidade).toFixed(2)}`}
-                                    />
-                                </ListItem>
-                            ))}
-                        </List>
-                        <Typography variant="h6">
-                            Total: R$ {carrinho.reduce((acc, item) => acc + item.price * item.quantidade, 0).toFixed(2)}
-                        </Typography>
-                    </Box>
-                );
-            case 2:
-                return (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>Finalizar Pagamento</Typography>
-                        <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 2 }}>
-                            Selecione o método de pagamento e finalize a venda.
-                            Para pagamentos em cartão ou PIX, aguarde a notificação automática.
-                            Para pagamentos em dinheiro, finalize manualmente.
-                        </Alert>
-                        <FormControl fullWidth sx={{ mb: 2 }}>
-                            <InputLabel id="payment-method-label">Método de Pagamento</InputLabel>
-                            <Select
-                                labelId="payment-method-label"
-                                value={paymentMethod || ''}
-                                onChange={handlePaymentMethodChange}
-                                onKeyDown={handlePaymentMethodKeyDown}
-                                label="Método de Pagamento"
-                                inputRef={paymentMethodRef}
-                            >
-                                <MenuItem value="">Selecione um método</MenuItem>
-                                <MenuItem value="dinheiro">Dinheiro</MenuItem>
-                                <MenuItem value="cartao_credito">Cartão de Crédito</MenuItem>
-                                <MenuItem value="cartao_debito">Cartão de Débito</MenuItem>
-                                <MenuItem value="pix">PIX</MenuItem>
-                            </Select>
-                        </FormControl>
-                        <Typography variant="body2" sx={{ mb: 2 }}>
-                            Método mais utilizado: {mostUsedPaymentMethod || 'Não disponível'}
-                        </Typography>
-                        <Button
-                            variant="contained"
-                            color="secondary"
-                            onClick={finalizarVenda}
-                            ref={finalizarVendaButtonRef}
-                            onKeyDown={handleKeyDown}
-                            startIcon={isFinalizingVenda ? <CircularProgress size={24} color="inherit" /> : <PaymentIcon />}
-                            fullWidth
-                            disabled={!paymentMethod || isFinalizingVenda}
-                        >
-                            {isFinalizingVenda ? 'Finalizando...' : 'Finalizar Venda'}
-                        </Button>
-                    </Box>
-                );
-            default: return
+    const handleBarcodeSubmit = (event) => {
+        event.preventDefault();
+        const produto = produtos.find(p => p.barcode === barcodeInput);
+        if (produto) {
+            setProdutoSelecionado(produto);
+            setQuantidade('1');
+            adicionarAoCarrinho();
+        } else {
+            setSnackbar({
+                open: true,
+                message: 'Produto não encontrado',
+                severity: 'error'
+            });
         }
+        setBarcodeInput('');
     };
 
     return (
-        <Box sx={{ p: isMobile ? 1 : 2 }}> {/* Reduz o padding em dispositivos móveis */}
-            <Typography variant={isMobile ? "h5" : "h4"} align="center" gutterBottom>
-                Frente de Caixa
-            </Typography>
-
-            <Alert severity="info" align="center" sx={{ mb: 2 }}>
-                Bem-vindo ao sistema de Frente de Caixa. Siga os passos abaixo para realizar uma venda.
-            </Alert>
-
-            <Stepper activeStep={activeStep} alternativeLabel>
-                {steps.map((label) => (
-                    <Step key={label}>
-                        <StepLabel>{label}</StepLabel>
-                    </Step>
-                ))}
-            </Stepper>
-
-            <Card sx={{ mt: 2 }}>
-                <CardContent>
-                    {renderStepContent(activeStep)}
-                </CardContent>
-            </Card>
-
+        <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100vh' }}>
+            {/* Painel de Entrada de Produtos */}
             <Box sx={{ 
-                display: 'flex', 
-                flexDirection: isMobile ? 'column' : 'row', 
-                pt: 2, 
-                justifyContent: 'space-between'
+                width: isMobile ? '100%' : '60%', 
+                p: 2, 
+                borderRight: isMobile ? 0 : 1, 
+                borderBottom: isMobile ? 1 : 0, 
+                borderColor: 'divider',
+                overflowY: 'auto'
             }}>
+                <Typography variant="h5" gutterBottom>
+                    Frente de Caixa
+                </Typography>
+
+                {/* Leitor de Código de Barras */}
+                <form onSubmit={handleBarcodeSubmit}>
+                    <TextField
+                        fullWidth
+                        label="Código de Barras"
+                        value={barcodeInput}
+                        onChange={handleBarcodeInputChange}
+                        InputProps={{
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <BarcodeIcon />
+                                </InputAdornment>
+                            ),
+                        }}
+                        sx={{ mb: 2 }}
+                    />
+                </form>
+
+                {/* Seleção de Produto e Quantidade */}
+                <Autocomplete
+                    options={produtos || []}
+                    getOptionLabel={(option) => {
+                        if (!option) return '';
+                        if (typeof option === 'string') return option;
+                        return option.name ? `${option.name} - R$ ${option.price.toFixed(2)} / ${option.unit}` : '';
+                    }}
+                    renderInput={(params) => (
+                        <TextField
+                            {...params}
+                            label="Produto"
+                            margin="normal"
+                            inputRef={produtoInputRef}
+                            onKeyDown={handleKeyDown}
+                            fullWidth
+                        />
+                    )}
+                    value={produtoSelecionado}
+                    onChange={handleAutocompleteChange}
+                    onInputChange={handleInputChange}
+                    inputValue={inputValue}
+                    isOptionEqualToValue={(option, value) => option._id === value._id}
+                    fullWidth
+                    freeSolo
+                    selectOnFocus
+                    clearOnBlur
+                    handleHomeEndKeys
+                />
+                <TextField
+                    type={isMobile ? "number" : "text"} // Altera para "number" em dispositivos móveis
+                    fullWidth
+                    label="Quantidade"
+                    value={quantidade}
+                    onChange={handleQuantidadeChange}
+                    onFocus={handleQuantidadeFocus}
+                    margin="normal"
+                    inputRef={quantidadeInputRef}
+                    onKeyDown={handleKeyDown}
+                    InputProps={{
+                        endAdornment: <InputAdornment position="end">{getUnidadeMedida()}</InputAdornment>,
+                        inputMode: isMobile ? "decimal" : "text", // Garante teclado numérico em dispositivos móveis
+                        pattern: isMobile ? "[0-9]*" : undefined, // Permite apenas números em dispositivos móveis
+                    }}
+                />
                 <Button
-                    color="error"
-                    onClick={cancelarVenda}
-                    startIcon={<CancelIcon />}
                     variant="contained"
-                    disabled={carrinho.length === 0}
-                    fullWidth={isMobile}
-                    sx={{ mb: isMobile ? 1 : 0 }}
+                    color="primary"
+                    onClick={adicionarAoCarrinho}
+                    disabled={!produtoSelecionado || !quantidade}
+                    fullWidth
+                    sx={{ mt: 2, mb: 2 }}
                 >
-                    Cancelar Venda
+                    Adicionar ao Carrinho
                 </Button>
-                <Box sx={{ 
-                    display: 'flex', 
-                    justifyContent: isMobile ? 'space-between' : 'flex-end',
-                    width: isMobile ? '100%' : 'auto'
-                }}>
+
+                {/* Lista de Produtos Mais Vendidos */}
+                <Box sx={{ mt: 2 }}>
+                    <Typography variant="subtitle1">Produtos mais vendidos</Typography>
+                    {topSellingProducts.map((product, index) => (
+                        <Chip
+                            key={product._id}
+                            label={`${index + 1}: ${product.name}`}
+                            onClick={() => setProdutoSelecionado(product)}
+                            sx={{ mr: 1, mb: 1 }}
+                        />
+                    ))}
+                </Box>
+            </Box>
+
+            {/* Painel do Carrinho e Finalização */}
+            <Box sx={{ 
+                width: isMobile ? '100%' : '50%',  // Ajuste a largura para caber no painel
+                p: 2, 
+                display: 'flex', 
+                flexDirection: 'column',
+                height: isMobile ? 'auto' : '90vh' // Ajuste a altura para caber no painel
+            }}>
+                <Typography variant="h6" gutterBottom>Carrinho de Compras</Typography>
+                <List sx={{ flexGrow: 1, overflowY: 'auto', maxHeight: isMobile ? '40vh' : '60vh' }}>
+                    {carrinho.map((item, index) => (
+                        <ListItem
+                            key={index}
+                            secondaryAction={
+                                <IconButton edge="end" aria-label="delete" onClick={() => removerDoCarrinho(index)}>
+                                    <DeleteIcon />
+                                </IconButton>
+                            }
+                            sx={{ 
+                                bgcolor: 'background.paper', 
+                                mb: 1, 
+                                borderRadius: 1,
+                                boxShadow: 1
+                            }}
+                        >
+                            <ListItemText
+                                primary={item.name}
+                                secondary={`${formatarQuantidade(item.quantidade, item.unit)} x R$ ${item.price.toFixed(2)} = R$ ${(item.price * item.quantidade).toFixed(2)}`}
+                            />
+                        </ListItem>
+                    ))}
+                </List>
+
+                <Box sx={{ mt: 2 }}>
+                    <Typography variant="h6">
+                        Total: R$ {carrinho.reduce((acc, item) => acc + item.price * item.quantidade, 0).toFixed(2)}
+                    </Typography>
+
+                    <FormControl fullWidth sx={{ mt: 2 }}>
+                        <InputLabel id="payment-method-label">Método de Pagamento</InputLabel>
+                        <Select
+                            labelId="payment-method-label"
+                            value={paymentMethod}
+                            onChange={handlePaymentMethodChange}
+                            label="Método de Pagamento"
+                        >
+                            <MenuItem value="">Selecione um método</MenuItem>
+                            <MenuItem value="dinheiro">Dinheiro</MenuItem>
+                            <MenuItem value="cartao_credito">Cartão de Crédito</MenuItem>
+                            <MenuItem value="cartao_debito">Cartão de Débito</MenuItem>
+                            <MenuItem value="pix">PIX</MenuItem>
+                        </Select>
+                    </FormControl>
+
                     <Button
-                        color="inherit"
-                        disabled={activeStep === 0}
-                        onClick={handleBack}
-                        sx={{ mr: isMobile ? 0 : 1 }}
+                        variant="contained"
+                        color="secondary"
+                        onClick={finalizarVenda}
+                        startIcon={isFinalizingVenda ? <CircularProgress size={24} color="inherit" /> : <PaymentIcon />}
+                        fullWidth
+                        disabled={!paymentMethod || isFinalizingVenda || carrinho.length === 0}
+                        sx={{ mt: 2 }}
                     >
-                        Voltar
+                        {isFinalizingVenda ? 'Finalizando...' : 'Finalizar Venda'}
                     </Button>
-                    <Button 
-                        onClick={handleNext} 
-                        disabled={activeStep === steps.length - 1 || carrinho.length === 0}
-                        variant={isMobile ? "contained" : "text"}
+
+                    <Button
+                        color="error"
+                        onClick={cancelarVenda}
+                        startIcon={<CancelIcon />}
+                        variant="outlined"
+                        disabled={carrinho.length === 0}
+                        fullWidth
+                        sx={{ mt: 2 }}
                     >
-                        {activeStep === steps.length - 1 ? 'Finalizar' : 'Próximo'}
+                        Cancelar Venda
                     </Button>
                 </Box>
             </Box>
 
-            <Divider sx={{ my: 2 }} />
-
+            {/* Snackbar para mensagens */}
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={3000}
                 onClose={handleCloseSnackbar}
-                anchorOrigin={{ vertical: 'top', horizontal: 'right' }} // Ajuste para o canto superior direito
+                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
                 <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-
-            <Box sx={{ mt: 2, mb: 2 }}>
-                <Typography variant="subtitle1">Produtos mais vendidos</Typography>
-                {topSellingProducts.map((product, index) => (
-                    <Chip
-                        key={product._id}
-                        label={`${index + 1}: ${product.name}`}
-                        onClick={() => setProdutoSelecionado(product)}
-                        sx={{ mr: 1, mb: 1 }}
-                    />
-                ))}
-            </Box>
         </Box>
     );
 };

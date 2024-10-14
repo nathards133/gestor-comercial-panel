@@ -38,12 +38,12 @@ import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Badge, Dialog, DialogTitle, DialogContent } from '@mui/material';
 import NotificationsIcon from '@mui/icons-material/Notifications';
-import PaymentNotificationList from './PaymentNotificationList';
+// import PaymentNotificationList from './PaymentNotificationList';
 
 const menuItems = [
   { text: 'Caixa', icon: <PointOfSale />, path: '/' },
   { text: 'Produtos', icon: <ShoppingCart />, path: '/products' },
-  { text: 'Vendas', icon: <AttachMoney />, path: '/sales' },
+  { text: 'Financeiro', icon: <AttachMoney />, path: '/sales' },
   { text: 'Relatórios', icon: <Assessment />, path: '/reports' },
   { text: 'Fornecedores', icon: <Store />, path: '/suppliers' },
   { text: 'Contas a Pagar', icon: <RequestPage />, path: '/accounts-payable' },
@@ -224,7 +224,7 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
       <Dialog open={notificationDialogOpen} onClose={() => setNotificationDialogOpen(false)}>
         <DialogTitle>Notificações de Pagamento</DialogTitle>
         <DialogContent>
-          <PaymentNotificationList notifications={notifications} />
+          {/* <PaymentNotificationList notifications={notifications} /> */}
         </DialogContent>
       </Dialog>
       <Box component="main" sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` } }}>

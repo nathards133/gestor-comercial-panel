@@ -35,21 +35,24 @@ import { useNavigate } from 'react-router-dom';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
 const SalesPage = () => {
     const [sales, setSales] = useState([]);
+    const [tabValue, setTabValue] = useState(0);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [periodInfo, setPeriodInfo] = useState(null);
     const [stats, setStats] = useState(() => {
         const cachedStats = localStorage.getItem('salesStats');
         return cachedStats ? JSON.parse(cachedStats) : { sales: [], totalSales: 0 };
     });
-    const [tabValue, setTabValue] = useState(0);
     const [cachedData, setCachedData] = useState({});
     const [lastStatsFetch, setLastStatsFetch] = useState(null);
-    const [periodInfo, setPeriodInfo] = useState(null);
     const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1 });
-    const [loading, setLoading] = useState(false);
     const [notifications, setNotifications] = useState([]);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
-    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(true); 
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(true);  //ativa e desativa o modal de senha
     const [isContentVisible, setIsContentVisible] = useState(false); // ativa e desativa o conteudo do painel
     const navigate = useNavigate();
     const [page, setPage] = useState(0);
@@ -59,71 +62,55 @@ const SalesPage = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+    const [dashboardData, setDashboardData] = useState(null);
+
+    const fetchDashboardData = useCallback(async () => {
+        try {
+            const response = await axios.get(`${API_URL}/api/sales/dashboard`);
+            setDashboardData(response.data);
+        } catch (error) {
+            console.error('Erro ao buscar dados do dashboard:', error);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, [fetchDashboardData]);
+
+    const renderFinancialCard = (title, value, isPositive) => (
+        <Card sx={{ mb: 2, bgcolor: isPositive ? 'success.light' : 'error.light' }}>
+            <CardContent>
+                <Typography variant="h6" component="div">
+                    {title}
+                </Typography>
+                <Typography variant="h4" component="div" color={isPositive ? 'success.dark' : 'error.dark'}>
+                    R$ {(value || 0).toFixed(2)}
+                </Typography>
+            </CardContent>
+        </Card>
+    );
+
     const fetchSales = useCallback(async (period) => {
         setLoading(true);
+        setError(null);
         try {
-            let startDate, endDate;
-            const now = new Date();
-
-            switch (period) {
-                case 'day':
-                    startDate = startOfDay(now);
-                    endDate = now;
-                    break;
-                case 'week':
-                    startDate = startOfWeek(now, { weekStartsOn: 1 }); // 1 representa segunda-feira
-                    endDate = now;
-                    break;
-                case 'month':
-                    const lastMonth = subMonths(now, 1);
-                    startDate = startOfMonth(lastMonth);
-                    endDate = endOfMonth(lastMonth);
-                    break;
-                default:
-                    throw new Error('Período inválido');
-            }
-
-            const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sales`, {
-                params: {
-                    startDate: startDate.toISOString(),
-                    endDate: endDate.toISOString(),
-                    period: period
-                }
+            const response = await axios.get(`${API_URL}/api/sales`, {
+                params: { period }
             });
-
-            const newSales = Array.isArray(response.data.sales) ? response.data.sales : [];
-            setSales(newSales);
-            setPeriodInfo({
-                start: startDate,
-                end: endDate,
-                period: period
-            });
-
-            // Buscar estatísticas de produtos para o período
-            const statsResponse = await axios.get(`${process.env.REACT_APP_API_URL}/api/sales/stats`, {
-                params: {
-                    startDate: startDate.toISOString(),
-                    endDate: endDate.toISOString()
-                }
-            });
-
-            setStats(statsResponse.data);
-
-            if (newSales.length === 0 && period === 'month') {
-                setSnackbar({
-                    open: true,
-                    message: `Não foram feitas vendas em ${format(startDate, 'MMMM', { locale: ptBR })}`,
-                    severity: 'info'
-                });
-            }
+            setSales(response.data.sales);
+            setPeriodInfo(response.data.periodInfo);
         } catch (error) {
             console.error('Erro ao buscar vendas:', error);
+            setError('Falha ao carregar as vendas. Por favor, tente novamente.');
             setSales([]);
-            setStats({ productStats: [] });
         } finally {
             setLoading(false);
         }
     }, []);
+
+    useEffect(() => {
+        fetchSales('day');
+    }, [fetchSales]);
 
     const fetchStats = useCallback(async () => {
         const now = new Date();
@@ -145,10 +132,6 @@ const SalesPage = () => {
     }, []);
 
     useEffect(() => {
-        fetchSales('day'); // Inicialmente, carrega as vendas do dia
-    }, [fetchSales]);
-
-    useEffect(() => {
         fetchStats();
         const interval = setInterval(fetchStats, 5 * 60 * 1000);
         return () => clearInterval(interval);
@@ -156,20 +139,20 @@ const SalesPage = () => {
 
     useEffect(() => {
         // Função para buscar notificações
-        const fetchNotifications = async () => {
-            try {
-                const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/payments/notifications`);
-                setNotifications(response.data);
-            } catch (error) {
-                console.error('Erro ao buscar notificações:', error);
-            }
-        };
+        // const fetchNotifications = async () => {
+        //     try {
+        //         const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/payments/notifications`);
+        //         setNotifications(response.data);
+        //     } catch (error) {
+        //         console.error('Erro ao buscar notificações:', error);
+        //     }
+        // };
 
-        fetchNotifications();
+        // fetchNotifications();
         // Atualiza as notificações a cada 5 minutos
-        const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
+        // const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
 
-        return () => clearInterval(interval);
+        // return () => clearInterval(interval);
     }, []);
 
     const totalSalesValue = useMemo(() => {
@@ -177,8 +160,8 @@ const SalesPage = () => {
     }, [sales]);
 
     const totalSalesCount = useMemo(() => {
-        return stats.totalSales || 0;
-    }, [stats.totalSales]);
+        return sales.length;
+    }, [sales]);
 
     const topSellingProduct = useMemo(() => {
         const productCounts = sales.flatMap(sale => {
@@ -271,9 +254,49 @@ const SalesPage = () => {
 
     const renderSkeleton = () => (
         <Container>
-            <Skeleton variant="rectangular" width="100%" height={118} sx={{ mb: 2 }} />
-            <Skeleton variant="rectangular" width="100%" height={240} sx={{ mb: 2 }} />
-            <Skeleton variant="rectangular" width="100%" height={360} />
+            <Skeleton variant="text" width="60%" height={40} sx={{ mb: 2, mx: 'auto' }} /> {/* Título */}
+            <Skeleton variant="rectangular" width="100%" height={80} sx={{ mb: 3 }} /> {/* Alerta */}
+            
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+                {[1, 2, 3].map((item) => (
+                    <Grid item xs={12} sm={4} key={item}>
+                        <Skeleton variant="rectangular" width="100%" height={100} />
+                    </Grid>
+                ))}
+            </Grid>
+            
+            <Skeleton variant="rectangular" width="100%" height={48} sx={{ mb: 2 }} /> {/* Tabs */}
+            
+            <Skeleton variant="text" width="40%" sx={{ mb: 2, mx: 'auto' }} /> {/* Período */}
+            
+            <TableContainer component={Paper} sx={{ mt: 2 }}>
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                            {[1, 2, 3, 4].map((item) => (
+                                <TableCell key={item}>
+                                    <Skeleton variant="text" width="100%" />
+                                </TableCell>
+                            ))}
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {[1, 2, 3, 4, 5].map((row) => (
+                            <TableRow key={row}>
+                                {[1, 2, 3, 4].map((cell) => (
+                                    <TableCell key={cell}>
+                                        <Skeleton variant="text" width="100%" />
+                                    </TableCell>
+                                ))}
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+            
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                <Skeleton variant="rectangular" width={120} height={36} /> {/* Paginação */}
+            </Box>
         </Container>
     );
 
@@ -333,7 +356,6 @@ const SalesPage = () => {
 
     return (
         <Box sx={{ p: 2 }}>
-                        
             <PasswordModal
                 open={isPasswordModalOpen}
                 onClose={handlePasswordModalClose}
@@ -342,14 +364,16 @@ const SalesPage = () => {
                 alert="Somente administradores podem acessar esta página."
             />
             
-            {isContentVisible ? (
-                <>
+            {isPasswordModalOpen ? (
+                renderSkeleton()
+            ) : (
+                <div inert={!isContentVisible}>
                     <Typography variant={isMobile ? "h5" : "h4"} gutterBottom align="center">
-                        Vendas
+                        Dashboard de Vendas
                     </Typography>
 
                     <Alert severity="info" align="center" sx={{ mb: 2 }}>
-                    Esta página é destinada ao administrador do sistema, oferecendo uma visão geral do desempenho do seu negócio. Para garantir uma análise precisa e confiável, mantenha o sistema sempre atualizado. Assim, você poderá identificar oportunidades e aprimorar continuamente os resultados.
+                        Esta página é destinada ao administrador do sistema, oferecendo uma visão geral do desempenho do seu negócio. Para garantir uma análise precisa e confiável, mantenha o sistema sempre atualizado. Assim, você poderá identificar oportunidades e aprimorar continuamente os resultados.
                     </Alert>
 
                     <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -385,65 +409,50 @@ const SalesPage = () => {
                         </Grid>
                     </Grid>
 
-                    <Tabs 
-                        value={tabValue} 
-                        onChange={handleTabChange} 
-                        centered 
-                        variant={isMobile ? "fullWidth" : "standard"}
-                    >
+                    <Tabs value={tabValue} onChange={handleTabChange} centered>
                         <Tab label="Dia" />
                         <Tab label="Semana" />
                         <Tab label="Mês" />
                     </Tabs>
 
-                    {periodInfo && (
-                        <Typography variant="subtitle1" align="center" sx={{ mt: 2, mb: 2 }}>
-                            {periodInfo.period === 'day' && 'Vendas de hoje'}
-                            {periodInfo.period === 'week' && `Vendas desta semana (${format(periodInfo.start, 'dd/MM')} - ${format(periodInfo.end, 'dd/MM')})`}
-                            {periodInfo.period === 'month' && `Vendas de ${format(periodInfo.start, 'MMMM', { locale: ptBR })}`}
-                        </Typography>
-                    )}
-
-                    {renderPeriodWarning()}
-                    {renderNewUserWarning()}
-
-                    {isMobile ? (
-                        <>
-                            {paginatedSales.map(renderMobileSaleCard)}
-                            {renderMobilePagination()}
-                        </>
+                    {loading ? (
+                        <CircularProgress />
+                    ) : error ? (
+                        <Alert severity="error">{error}</Alert>
                     ) : (
-                        <TableContainer component={Paper} sx={{ mt: 2, overflowX: 'auto' }}>
-                            <Table size="medium">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell>Data</TableCell>
-                                        <TableCell>Produtos</TableCell>
-                                        <TableCell align="right">Valor Total</TableCell>
-                                        <TableCell>Método de Pagamento</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {paginatedSales.map((sale) => (
-                                        <TableRow key={sale._id}>
-                                            <TableCell>{new Date(sale.createdAt).toLocaleString()}</TableCell>
-                                            <TableCell>{renderSaleItems(sale)}</TableCell>
-                                            <TableCell align="right">R$ {sale.totalValue?.toFixed(2) || '0.00'}</TableCell>
-                                            <TableCell>{sale.paymentMethod || 'Não especificado'}</TableCell>
+                        <>
+                            {periodInfo && (
+                                <Typography variant="subtitle1" align="center" sx={{ mt: 2, mb: 2 }}>
+                                    {periodInfo.label}
+                                </Typography>
+                            )}
+                            {sales.length === 0 ? (
+                                <Alert severity="info">Nenhuma venda encontrada para este período.</Alert>
+                            ) : (
+                            <TableContainer component={Paper} sx={{ mt: 2, overflowX: 'auto' }}>
+                                <Table size="medium">
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell>Data</TableCell>
+                                            <TableCell>Produtos</TableCell>
+                                            <TableCell align="right">Valor Total</TableCell>
+                                            <TableCell>Método de Pagamento</TableCell>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                            <TablePagination
-                                component="div"
-                                count={sales.length}
-                                page={page}
-                                onPageChange={handleChangePage}
-                                rowsPerPage={rowsPerPage}
-                                onRowsPerPageChange={handleChangeRowsPerPage}
-                                labelRowsPerPage="Linhas por página:"
-                            />
-                        </TableContainer>
+                                    </TableHead>
+                                    <TableBody>
+                                        {paginatedSales.map((sale) => (
+                                            <TableRow key={sale._id}>
+                                                <TableCell>{new Date(sale.createdAt).toLocaleString()}</TableCell>
+                                                <TableCell>{renderSaleItems(sale)}</TableCell>
+                                                <TableCell align="right">R$ {sale.totalValue?.toFixed(2) || '0.00'}</TableCell>
+                                                <TableCell>{sale.paymentMethod || 'Não especificado'}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                                </TableContainer>
+                            )}
+                        </>
                     )}
 
                     {/* <Typography variant={isMobile ? "subtitle1" : "h6"} sx={{ mt: 4, mb: 2, textAlign: 'center' }}>
@@ -475,9 +484,7 @@ const SalesPage = () => {
                             </TableBody>
                         </Table> */}
                     </TableContainer>
-                </>
-            ) : (
-                renderSkeleton()
+                </div>
             )}
         </Box>
     );
