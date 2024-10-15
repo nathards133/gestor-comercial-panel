@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import BarcodeReader from 'react-barcode-reader';
 import {
     Table,
     TableBody,
@@ -41,12 +40,14 @@ import {
     Archive as ArchiveIcon,
     Unarchive as UnarchiveIcon,
     Edit as EditIcon,
-    Inventory as InventoryIcon
+    Inventory as InventoryIcon,
 } from '@mui/icons-material';
 import ProductImport from './ProductImport';
 import { useAuth } from '../contexts/AuthContext';
 import WarningMessage from './WarningMessage';
 import ProductEditDialog from './ProductEditDialog';
+import CropFreeIcon from '@mui/icons-material/CropFree';
+import Quagga from 'quagga';
 
 const ProductList = () => {
     const [products, setProducts] = useState([]);
@@ -78,6 +79,8 @@ const ProductList = () => {
     });
     const [lowStockProducts, setLowStockProducts] = useState([]);
     const [stockAlerts, setStockAlerts] = useState([]);
+    const [isBarcodeReaderOpen, setIsBarcodeReaderOpen] = useState(false);
+    const videoRef = useRef(null);
 
     useEffect(() => {
         fetchProducts();
@@ -93,6 +96,23 @@ const ProductList = () => {
         }
         setNewProduct(prev => ({ ...prev, unit: defaultUnit }));
     }, [user.businessType]);
+
+    useEffect(() => {
+        if (isBarcodeReaderOpen) {
+            initializeQuagga();
+        }
+
+        return () => {
+            if (Quagga.initialized) {
+                Quagga.stop();
+            }
+            Quagga.offDetected(handleScan);
+            // Pare o stream de vídeo quando o componente for desmontado
+            if (videoRef.current && videoRef.current.srcObject) {
+                videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [isBarcodeReaderOpen]);
 
     const fetchProducts = async () => {
         try {
@@ -211,15 +231,22 @@ const ProductList = () => {
         return Object.values(newErrors).every(error => error === '');
     };
 
-    const handleScan = (data) => {
-        setScannedBarcode(data);
-        setNewProduct(prevProduct => ({ ...prevProduct, barcode: data }));
-        setIsScannerActive(false);
-    }
+    const handleScan = (result) => {
+        if (result.codeResult) {
+            console.log('Código de barras lido:', result.codeResult.code);
+            console.log('Formato:', result.codeResult.format);
+            setNewProduct(prevProduct => ({ 
+                ...prevProduct, 
+                barcode: result.codeResult.code,
+                barcodeFormat: result.codeResult.format
+            }));
+            stopBarcodeScanner();
+        }
+    };
 
     const handleError = (err) => {
         console.error(err);
-    }
+    };
 
     const handleImportComplete = () => {
         fetchProducts();
@@ -392,6 +419,74 @@ const ProductList = () => {
                 return 'g';
             default:
                 return 'unidade';
+        }
+    };
+
+    const stopBarcodeScanner = () => {
+        if (Quagga.initialized) {
+            Quagga.stop();
+        }
+        if (videoRef.current && videoRef.current.srcObject) {
+            videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        }
+        setIsBarcodeReaderOpen(false);
+    };
+
+    const openBarcodeScanner = () => {
+        setIsBarcodeReaderOpen(true);
+    };
+
+    const initializeQuagga = () => {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+                .then(function(stream) {
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                        videoRef.current.play();
+                    }
+                    
+                    Quagga.init(
+                        {
+                            inputStream: {
+                                name: "Live",
+                                type: "LiveStream",
+                                target: videoRef.current,
+                                constraints: {
+                                    width: 640,
+                                    height: 480,
+                                    facingMode: "environment",
+                                },
+                            },
+                            locator: {
+                                patchSize: "medium",
+                                halfSample: true,
+                            },
+                            numOfWorkers: 2,
+                            decoder: {
+                                readers: [
+                                    {
+                                        format: "ean_13_reader",
+                                        config: {}
+                                    }
+                                ]
+                            },
+                            locate: true,
+                        },
+                        function(err) {
+                            if (err) {
+                                console.error(err);
+                                return;
+                            }
+                            console.log("Quagga initialization finished");
+                            Quagga.start();
+                        }
+                    );
+
+                    Quagga.onDetected(handleScan);
+                })
+                .catch(function(err) {
+                    console.error("Erro ao acessar a câmera:", err);
+                });
         }
     };
 
@@ -575,6 +670,15 @@ const ProductList = () => {
                         onChange={handleInputChange}
                         error={!!errors.barcode}
                         helperText={errors.barcode}
+                        InputProps={{
+                            endAdornment: (
+                                <InputAdornment position="end">
+                                    <IconButton onClick={openBarcodeScanner}>
+                                        <CropFreeIcon />
+                                    </IconButton>
+                                </InputAdornment>
+                            ),
+                        }}
                     />
                     <TextField
                         select
@@ -593,23 +697,6 @@ const ProductList = () => {
                             </MenuItem>
                         ))}
                     </TextField>
-                    <FormControlLabel
-                        control={
-                            <Switch
-                                checked={isScannerActive}
-                                onChange={() => setIsScannerActive(!isScannerActive)}
-                                name="scannerActive"
-                                color="primary"
-                            />
-                        }
-                        label="Ativar Scanner de Código de Barras"
-                    />
-                    {isScannerActive && (
-                        <BarcodeReader
-                            onError={handleError}
-                            onScan={handleScan}
-                        />
-                    )}
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleCloseDialog}>Cancelar</Button>
@@ -640,6 +727,18 @@ const ProductList = () => {
                 businessType={user.businessType}
                 userId={user._id} // Passando o userId para o ProductEditDialog
             />
+
+            {/* Diálogo para o leitor de código de barras */}
+            <Dialog open={isBarcodeReaderOpen} onClose={stopBarcodeScanner}>
+                <DialogTitle>Ler Código de Barras</DialogTitle>
+                <DialogContent>
+                    <Typography>Aponte a câmera para o código de barras</Typography>
+                    <div style={{ position: 'relative', width: '100%', height: 300 }}>
+                        <video ref={videoRef} style={{ width: '100%', height: '100%' }} />
+                        <canvas id="interactive" className="viewport" style={{ position: 'absolute', top: 0, left: 0 }} />
+                    </div>
+                </DialogContent>
+            </Dialog>
 
         </Box>
     );
