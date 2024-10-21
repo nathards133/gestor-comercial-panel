@@ -4,9 +4,10 @@ import {
   Typography, Box, TextField, Button, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle,
   DialogContent, DialogActions, IconButton, Autocomplete, Chip, Tooltip, InputAdornment,
-  useMediaQuery, useTheme, Card, CardContent, Grid, Divider
+  useMediaQuery, useTheme, Card, CardContent, Grid, Divider, TablePagination,
+  FormControl, InputLabel, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, WhatsApp as WhatsAppIcon, Search as SearchIcon, Add as AddIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, WhatsApp as WhatsAppIcon, Search as SearchIcon, Add as AddIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -20,28 +21,52 @@ const SupplierManagement = () => {
     suppliedProducts: []
   });
   const [searchProduct, setSearchProduct] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [sortBy, setSortBy] = useState('name');
+  const [sortOrder, setSortOrder] = useState('asc');
+  const [filterCity, setFilterCity] = useState('');
+  const [appliedFilters, setAppliedFilters] = useState({});
+  const [isFiltersApplied, setIsFiltersApplied] = useState(false);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0
+  });
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
-    fetchSuppliers();
-    fetchProducts();
+    const savedFilters = JSON.parse(localStorage.getItem('supplierFilters')) || {};
+    setSortBy(savedFilters.sortBy || 'name');
+    setSortOrder(savedFilters.sortOrder || 'asc');
+    setFilterCity(savedFilters.filterCity || '');
+    setAppliedFilters(savedFilters);
+    setIsFiltersApplied(Object.keys(savedFilters).length > 0);
+    fetchSuppliers(savedFilters);
   }, []);
 
-  const fetchSuppliers = async () => {
+  const fetchSuppliers = async (filters = appliedFilters) => {
     try {
-      const response = await axios.get(`${API_URL}/api/suppliers`);
-      setSuppliers(response.data || []);
+      const response = await axios.get(`${API_URL}/api/suppliers`, {
+        params: {
+          ...filters,
+          page: page + 1,
+          limit: rowsPerPage,
+          search: searchProduct
+        }
+      });
+      setSuppliers(response.data.suppliers || []);
+      setPagination({
+        currentPage: response.data.currentPage,
+        totalPages: response.data.totalPages,
+        totalItems: response.data.totalItems
+      });
     } catch (error) {
       console.error('Erro ao buscar fornecedores:', error);
       setSuppliers([]);
     }
-  };
-
-  const fetchProducts = async () => {
-    const response = await axios.get(`${API_URL}/api/products`);
-    setProducts(response.data.products);
   };
 
   const handleInputChange = (e) => {
@@ -97,10 +122,120 @@ const SupplierManagement = () => {
     return `https://wa.me/${cleanPhone}`;
   };
 
-  const filteredSuppliers = suppliers.filter(supplier =>
-    supplier.suppliedProducts.some(product =>
-      product.name.toLowerCase().includes(searchProduct.toLowerCase())
-    )
+  const handleApplyFilters = () => {
+    const newFilters = {
+      sortBy,
+      sortOrder,
+      filterCity,
+    };
+    setAppliedFilters(newFilters);
+    setIsFiltersApplied(true);
+    localStorage.setItem('supplierFilters', JSON.stringify(newFilters));
+    fetchSuppliers(newFilters);
+  };
+
+  const handleClearFilters = () => {
+    const clearedFilters = {
+      sortBy: 'name',
+      sortOrder: 'asc',
+      filterCity: '',
+    };
+    setSortBy('name');
+    setSortOrder('asc');
+    setFilterCity('');
+    setAppliedFilters(clearedFilters);
+    setIsFiltersApplied(false);
+    localStorage.removeItem('supplierFilters');
+    fetchSuppliers(clearedFilters);
+  };
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+    fetchSuppliers({ ...appliedFilters, page: newPage + 1 });
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+    fetchSuppliers({ ...appliedFilters, page: 1, limit: parseInt(event.target.value, 10) });
+  };
+
+  const renderFilterControls = () => (
+    <Accordion>
+      <AccordionSummary
+        expandIcon={<ExpandMoreIcon />}
+        aria-controls="filter-controls-content"
+        id="filter-controls-header"
+      >
+        <Typography>
+          Filtros e Ordenação
+          {isFiltersApplied && (
+            <Chip
+              size="small"
+              label="Filtros aplicados"
+              color="primary"
+              style={{ marginLeft: 10 }}
+            />
+          )}
+        </Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth variant="outlined" size="small">
+              <InputLabel>Ordenar por</InputLabel>
+              <Select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                label="Ordenar por"
+              >
+                <MenuItem value="name">Nome</MenuItem>
+                <MenuItem value="cnpj">CNPJ</MenuItem>
+                <MenuItem value="email">Email</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Button 
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              fullWidth
+              variant="outlined"
+            >
+              {sortOrder === 'asc' ? 'Crescente' : 'Decrescente'}
+            </Button>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <TextField
+              fullWidth
+              label="Filtrar por cidade"
+              variant="outlined"
+              size="small"
+              value={filterCity}
+              onChange={(e) => setFilterCity(e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleApplyFilters}
+              fullWidth
+            >
+              Aplicar Filtros
+            </Button>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Button
+              variant="outlined"
+              onClick={handleClearFilters}
+              fullWidth
+            >
+              Limpar Filtros
+            </Button>
+          </Grid>
+        </Grid>
+      </AccordionDetails>
+    </Accordion>
   );
 
   const renderSupplierCard = (supplier) => (
@@ -169,8 +304,10 @@ const SupplierManagement = () => {
         </Button>
       </Box>
 
+      {renderFilterControls()}
+
       {isMobile ? (
-        filteredSuppliers.map(renderSupplierCard)
+        suppliers.map(renderSupplierCard)
       ) : (
         <TableContainer component={Paper}>
           <Table>
@@ -185,7 +322,7 @@ const SupplierManagement = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredSuppliers.map((supplier) => (
+              {suppliers.map((supplier) => (
                 <TableRow key={supplier._id}>
                   <TableCell>{supplier.name}</TableCell>
                   <TableCell>{supplier.cnpj}</TableCell>
@@ -215,6 +352,16 @@ const SupplierManagement = () => {
           </Table>
         </TableContainer>
       )}
+
+      <TablePagination
+        component="div"
+        count={pagination.totalItems}
+        page={page}
+        onPageChange={handleChangePage}
+        rowsPerPage={rowsPerPage}
+        onRowsPerPageChange={handleChangeRowsPerPage}
+        rowsPerPageOptions={[5, 10, 25, 50]}
+      />
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
         <DialogTitle>{currentSupplier._id ? 'Editar Fornecedor' : 'Adicionar Fornecedor'}</DialogTitle>

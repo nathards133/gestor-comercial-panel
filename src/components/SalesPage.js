@@ -64,6 +64,31 @@ const SalesPage = () => {
 
     const [dashboardData, setDashboardData] = useState(null);
 
+    const [financialSummary, setFinancialSummary] = useState({
+        grossSales: 0,
+        totalAccountsPayable: 0,
+        netProfit: 0
+    });
+
+    const [isFinancialSummaryLoading, setIsFinancialSummaryLoading] = useState(true);
+
+    const fetchFinancialSummary = useCallback(async () => {
+        setIsFinancialSummaryLoading(true);
+        try {
+            const response = await axios.get(`${API_URL}/api/sales/financial-summary`);
+            setFinancialSummary(response.data);
+        } catch (error) {
+            console.error('Erro ao buscar resumo financeiro:', error);
+            setFinancialSummary({ grossSales: 0, totalAccountsPayable: 0, netProfit: 0 });
+        } finally {
+            setIsFinancialSummaryLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchFinancialSummary();
+    }, [fetchFinancialSummary]);
+
     const fetchDashboardData = useCallback(async () => {
         try {
             const response = await axios.get(`${API_URL}/api/sales/dashboard`);
@@ -403,6 +428,40 @@ const SalesPage = () => {
                                     <Typography variant="h6">Produto Mais Vendido</Typography>
                                     <Typography variant="h4">
                                         {topSellingProduct}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                    </Grid>
+
+                    {/* Novos cards de resumo financeiro */}
+                    <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={12} sm={4}>
+                            <Card sx={{ bgcolor: '#e8f5e9' }}>
+                                <CardContent>
+                                    <Typography variant={isMobile ? "subtitle1" : "h6"}>Vendas Brutas</Typography>
+                                    <Typography variant={isMobile ? "h5" : "h4"}>
+                                        R$ {(financialSummary?.grossSales || 0).toFixed(2)}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                            <Card sx={{ bgcolor: '#ffebee' }}>
+                                <CardContent>
+                                    <Typography variant={isMobile ? "subtitle1" : "h6"}>Contas a Pagar</Typography>
+                                    <Typography variant={isMobile ? "h5" : "h4"}>
+                                        R$ {(financialSummary?.totalAccountsPayable || 0).toFixed(2)}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                            <Card sx={{ bgcolor: '#e3f2fd' }}>
+                                <CardContent>
+                                    <Typography variant={isMobile ? "subtitle1" : "h6"}>Lucro Líquido</Typography>
+                                    <Typography variant={isMobile ? "h5" : "h4"}>
+                                        R$ {(financialSummary?.netProfit || 0).toFixed(2)}
                                     </Typography>
                                 </CardContent>
                             </Card>

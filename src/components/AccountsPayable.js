@@ -11,6 +11,7 @@ import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon, Payment as Paym
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { format, parse } from 'date-fns';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -82,7 +83,10 @@ const AccountsPayable = () => {
   };
 
   const handleDateChange = (date) => {
-    setCurrentAccount(prev => ({ ...prev, dueDate: date }));
+    setCurrentAccount(prev => ({
+      ...prev,
+      dueDate: date ? format(date, 'dd/MM/yyyy') : ''
+    }));
   };
 
   const handleSubmit = async () => {
@@ -91,7 +95,8 @@ const AccountsPayable = () => {
         ...currentAccount, 
         isRecurring, 
         isInstallment, 
-        totalInstallments: isInstallment ? totalInstallments : undefined 
+        totalInstallments: isInstallment ? totalInstallments : undefined,
+        dueDate: currentAccount.dueDate ? format(parse(currentAccount.dueDate, 'dd/MM/yyyy', new Date()), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx") : null
       };
       if (currentAccount._id) {
         await axios.put(`${API_URL}/api/accounts-payable/${currentAccount._id}?isRecurring=${isRecurring}`, accountData);
@@ -110,15 +115,26 @@ const AccountsPayable = () => {
     if (installment) {
       try {
         const response = await axios.get(`${API_URL}/api/accounts-payable/installments/${account._id}`);
-        console.log('Parcelas recebidas:', response.data.installments);
-        setCurrentInstallments(response.data.installments || []);
+        console.log('Resposta da API:', response.data);
+        
+        // Filtrar parcelas com o mesmo parentInstallmentId ou a própria conta se for a primeira parcela
+        const installments = response.data.installmentAccounts.filter(
+          inst => inst.parentInstallmentId === account.parentInstallmentId || 
+                  inst._id === account.parentInstallmentId ||
+                  (inst._id === account._id && !inst.parentInstallmentId)
+        );
+        
+        setCurrentInstallments(installments);
         setOpenInstallmentModal(true);
       } catch (error) {
         console.error('Erro ao buscar detalhes das parcelas:', error);
         setCurrentInstallments([]);
       }
     } else {
-      setCurrentAccount(account);
+      setCurrentAccount({
+        ...account,
+        dueDate: account.dueDate ? format(new Date(account.dueDate), 'dd/MM/yyyy') : ''
+      });
       setIsRecurring(recurring);
       setIsInstallment(account.isInstallment);
       setTotalInstallments(account.totalInstallments || 2);
@@ -126,10 +142,10 @@ const AccountsPayable = () => {
     }
   };
 
-  const handleDelete = async (id, recurring) => {
+  const handleDelete = async (account, recurring) => {
     if (window.confirm('Tem certeza que deseja excluir esta conta?')) {
       try {
-        await axios.delete(`${API_URL}/api/accounts-payable/${id}?isRecurring=${recurring}`);
+        await axios.delete(`${API_URL}/api/accounts-payable/?id=${account._id}&isRecurring=${recurring}`);
         fetchAccounts();
       } catch (error) {
         console.error('Erro ao excluir conta:', error);
@@ -181,7 +197,7 @@ const AccountsPayable = () => {
       setSelectedAccounts([]);
     } catch (error) {
       console.error('Erro ao marcar contas como pagas:', error);
-      // Adicione uma notificação de erro para o usuário aqui
+      // Adicione uma notificaço de erro para o usuário aqui
     }
   };
 
@@ -196,6 +212,15 @@ const AccountsPayable = () => {
     } else {
       return <Chip label="A vencer" color="primary" />;
     }
+  };
+
+  const getAccountTypeName = (type) => {
+    const typeMap = {
+      supplier: 'Fornecedor',
+      rent: 'Aluguel',
+      other: 'Outro'
+    };
+    return typeMap[type] || type;
   };
 
   const renderAccountsTable = (accountsList = [], recurring, installment) => {
@@ -252,7 +277,7 @@ const AccountsPayable = () => {
                     onChange={() => handleSelectAccount(account._id)}
                   />
                 </TableCell>
-                <TableCell>{account.type}</TableCell>
+                <TableCell>{getAccountTypeName(account.type)}</TableCell>
                 <TableCell>{account.description || `${account.supplier?.name} - ${account.product?.name}`}</TableCell>
                 <TableCell>R$ {account.totalValue.toFixed(2)}</TableCell>
                 <TableCell>
@@ -269,7 +294,7 @@ const AccountsPayable = () => {
                   <IconButton onClick={() => handleEdit(account, recurring, installment)}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton onClick={() => handleDelete(account._id, recurring)}>
+                  <IconButton onClick={() => handleDelete(account, recurring)}>
                     <DeleteIcon />
                   </IconButton>
                 </TableCell>
@@ -281,12 +306,11 @@ const AccountsPayable = () => {
     );
   };
 
-  const renderInstallmentModal = () => {
-    console.log('Renderizando modal de parcelas. currentInstallments:', currentInstallments);
-    return (
-      <Dialog open={openInstallmentModal} onClose={() => setOpenInstallmentModal(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Detalhes das Parcelas</DialogTitle>
-        <DialogContent>
+  const renderInstallmentModal = () => (
+    <Dialog open={openInstallmentModal} onClose={() => setOpenInstallmentModal(false)} maxWidth="md" fullWidth>
+      <DialogTitle>Detalhes das Parcelas - {currentInstallments[0]?.description}</DialogTitle>
+      <DialogContent>
+        {Array.isArray(currentInstallments) && currentInstallments.length > 0 ? (
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
@@ -299,39 +323,33 @@ const AccountsPayable = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {Array.isArray(currentInstallments) && currentInstallments.length > 0 ? (
-                  currentInstallments.map((installment) => (
-                    <TableRow key={installment._id}>
-                      <TableCell>{`${installment.installmentNumber}/${installment.totalInstallments}`}</TableCell>
-                      <TableCell>R$ {installment.installmentValue.toFixed(2)}</TableCell>
-                      <TableCell>{new Date(installment.dueDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{getStatusChip(installment)}</TableCell>
-                      <TableCell>
-                        {!installment.isPaid && (
-                          <IconButton onClick={() => handleInstallmentPayment(installment._id)}>
-                            <PaymentIcon />
-                          </IconButton>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center">
-                      Nenhuma parcela encontrada
+                {currentInstallments.map((installment) => (
+                  <TableRow key={installment._id}>
+                    <TableCell>{`${installment.installmentNumber}/${installment.totalInstallments}`}</TableCell>
+                    <TableCell>R$ {installment.installmentValue.toFixed(2)}</TableCell>
+                    <TableCell>{new Date(installment.dueDate).toLocaleDateString()}</TableCell>
+                    <TableCell>{getStatusChip(installment)}</TableCell>
+                    <TableCell>
+                      {!installment.isPaid && (
+                        <IconButton onClick={() => handleInstallmentPayment(installment._id)}>
+                          <PaymentIcon />
+                        </IconButton>
+                      )}
                     </TableCell>
                   </TableRow>
-                )}
+                ))}
               </TableBody>
             </Table>
           </TableContainer>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenInstallmentModal(false)}>Fechar</Button>
-        </DialogActions>
-      </Dialog>
-    );
-  };
+        ) : (
+          <Typography>Nenhuma parcela encontrada.</Typography>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setOpenInstallmentModal(false)}>Fechar</Button>
+      </DialogActions>
+    </Dialog>
+  );
 
   const handleInstallmentPayment = async (installmentId) => {
     try {
@@ -439,9 +457,9 @@ const AccountsPayable = () => {
                 value={currentAccount.type}
                 onChange={handleInputChange}
               >
-                <MenuItem value="supplier">Fornecedor</MenuItem>
-                <MenuItem value="rent">Aluguel</MenuItem>
-                <MenuItem value="other">Outro</MenuItem>
+                <MenuItem value="supplier">{getAccountTypeName('supplier')}</MenuItem>
+                <MenuItem value="rent">{getAccountTypeName('rent')}</MenuItem>
+                <MenuItem value="other">{getAccountTypeName('other')}</MenuItem>
               </Select>
             </FormControl>
             {currentAccount.type === 'supplier' && (
@@ -526,8 +544,9 @@ const AccountsPayable = () => {
             ) : (
               <DatePicker
                 label="Data de Vencimento"
-                value={currentAccount.dueDate}
+                value={currentAccount.dueDate ? parse(currentAccount.dueDate, 'dd/MM/yyyy', new Date()) : null}
                 onChange={handleDateChange}
+                format="dd/MM/yyyy"
                 renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
               />
             )}

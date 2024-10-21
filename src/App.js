@@ -37,6 +37,10 @@ const darkTheme = createTheme({
       default: '#303030',
       paper: '#424242',
     },
+    text: {
+        primary: '#ffffff', // Isso definirá a cor do texto principal como branco
+        secondary: '#e0e0e0', // Isso definirá a cor do texto secundário como um cinza claro
+      },
   },
 });
 

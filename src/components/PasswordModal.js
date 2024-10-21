@@ -3,14 +3,19 @@ import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, A
 
 const PasswordModal = ({ open, onClose, onSubmit, title, alert }) => {
   const [password, setPassword] = useState('');
-  
 
   const handleSubmit = () => {
-    onSubmit(password);
-    setPassword('');
+    if (password.length === 4) {
+      onSubmit(password);
+      setPassword('');
+    }
   };
 
-
+  const handleKeyPress = (event) => {
+    if (event.key === 'Enter') {
+      handleSubmit();
+    }
+  };
 
   return (
     <Dialog open={open} onClose={onClose}>
@@ -25,6 +30,7 @@ const PasswordModal = ({ open, onClose, onSubmit, title, alert }) => {
           fullWidth
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onKeyPress={handleKeyPress}
           inputProps={{ maxLength: 4, pattern: '[0-9]*' }}
         />
       </DialogContent>

@@ -31,7 +31,12 @@ import {
     Grid,
     Chip,
     Tooltip,
-    Divider
+    Divider,
+    TablePagination,
+    FormControl,
+    InputLabel,
+    Select,
+    Badge,
 } from '@mui/material';
 import { NumericFormat } from 'react-number-format';
 import {
@@ -41,6 +46,9 @@ import {
     Unarchive as UnarchiveIcon,
     Edit as EditIcon,
     Inventory as InventoryIcon,
+    ExpandMore as ExpandMoreIcon,
+    FilterList as FilterListIcon,
+    Clear as ClearIcon,
 } from '@mui/icons-material';
 import ProductImport from './ProductImport';
 import { useAuth } from '../contexts/AuthContext';
@@ -48,6 +56,8 @@ import WarningMessage from './WarningMessage';
 import ProductEditDialog from './ProductEditDialog';
 import CropFreeIcon from '@mui/icons-material/CropFree';
 import Quagga from 'quagga';
+import { Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 
 const ProductList = () => {
     const [products, setProducts] = useState([]);
@@ -81,10 +91,25 @@ const ProductList = () => {
     const [stockAlerts, setStockAlerts] = useState([]);
     const [isBarcodeReaderOpen, setIsBarcodeReaderOpen] = useState(false);
     const videoRef = useRef(null);
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [sortBy, setSortBy] = useState('name');
+    const [sortOrder, setSortOrder] = useState('asc');
+    const [filterUnit, setFilterUnit] = useState('');
+    const [appliedFilters, setAppliedFilters] = useState({});
+    const [isFiltersApplied, setIsFiltersApplied] = useState(false);
+    const navigate = useNavigate();
 
     useEffect(() => {
-        fetchProducts();
-    }, [showArchived]);
+        const savedFilters = JSON.parse(localStorage.getItem('productFilters')) || {};
+        setSortBy(savedFilters.sortBy || 'name');
+        setSortOrder(savedFilters.sortOrder || 'asc');
+        setFilterUnit(savedFilters.filterUnit || '');
+        setShowArchived(savedFilters.showArchived || false);
+        setAppliedFilters(savedFilters);
+        setIsFiltersApplied(Object.keys(savedFilters).length > 0);
+        fetchProducts(savedFilters);
+    }, []);
 
     useEffect(() => {
         // Pré-seleciona a unidade com base no tipo de negócio
@@ -114,9 +139,16 @@ const ProductList = () => {
         };
     }, [isBarcodeReaderOpen]);
 
-    const fetchProducts = async () => {
+    const fetchProducts = async (filters = appliedFilters) => {
         try {
-            const res = await axios.get(`${apiUrl}/api/products?showArchived=${showArchived}`);
+            const res = await axios.get(`${apiUrl}/api/products`, {
+                params: {
+                    ...filters,
+                    page: page + 1,
+                    limit: rowsPerPage,
+                    search: searchTerm
+                }
+            });
             if (res.data && Array.isArray(res.data.products)) {
                 setProducts(res.data.products);
                 setPagination({
@@ -135,10 +167,14 @@ const ProductList = () => {
                     });
                 }
             } else {
-                console.error('A resposta da API não contém um array de produtos:', res.data);
+                console.error('A resposta da API não cont��m um array de produtos:', res.data);
                 setProducts([]);
             }
         } catch (error) {
+            if(error.response && error.response.status === 401)
+            {
+                navigate('/login');
+            }
             console.error('Erro ao buscar produtos:', error);
             setProducts([]);
         }
@@ -490,6 +526,142 @@ const ProductList = () => {
         }
     };
 
+    const handleChangePage = (event, newPage) => {
+        setPage(newPage);
+    };
+
+    const handleChangeRowsPerPage = (event) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(0);
+    };
+
+    const handleSortChange = (event) => {
+        setSortBy(event.target.value);
+    };
+
+    const handleSortOrderChange = () => {
+        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    };
+
+    const handleFilterUnitChange = (event) => {
+        setFilterUnit(event.target.value);
+    };
+
+    const handleApplyFilters = () => {
+        const newFilters = {
+            sortBy,
+            sortOrder,
+            filterUnit,
+            showArchived
+        };
+        setAppliedFilters(newFilters);
+        setIsFiltersApplied(true);
+        localStorage.setItem('productFilters', JSON.stringify(newFilters));
+        fetchProducts(newFilters);
+    };
+
+    const handleClearFilters = () => {
+        const clearedFilters = {
+            sortBy: 'name',
+            sortOrder: 'asc',
+            filterUnit: '',
+            showArchived: false
+        };
+        setSortBy('name');
+        setSortOrder('asc');
+        setFilterUnit('');
+        setShowArchived(false);
+        setAppliedFilters(clearedFilters);
+        setIsFiltersApplied(false);
+        localStorage.removeItem('productFilters');
+        fetchProducts(clearedFilters);
+    };
+
+    const renderFilterControls = () => (
+        <Accordion>
+            <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                aria-controls="filter-controls-content"
+                id="filter-controls-header"
+            >
+                <Typography>
+                    Filtros e Ordenação
+                    {isFiltersApplied && (
+                        <Chip
+                            size="small"
+                            label="Filtros aplicados"
+                            color="primary"
+                            style={{ marginLeft: 10 }}
+                        />
+                    )}
+                </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+                <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} sm={6} md={3}>
+                        <FormControl fullWidth variant="outlined" size="small">
+                            <InputLabel>Ordenar por</InputLabel>
+                            <Select
+                                value={sortBy}
+                                onChange={handleSortChange}
+                                label="Ordenar por"
+                            >
+                                <MenuItem value="name">Nome</MenuItem>
+                                <MenuItem value="price">Preço</MenuItem>
+                                <MenuItem value="quantity">Quantidade</MenuItem>
+                            </Select>
+                        </FormControl>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Button 
+                            onClick={handleSortOrderChange}
+                            fullWidth
+                            variant="outlined"
+                        >
+                            {sortOrder === 'asc' ? 'Crescente' : 'Decrescente'}
+                        </Button>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <FormControl fullWidth variant="outlined" size="small">
+                            <InputLabel>Filtrar por unidade</InputLabel>
+                            <Select
+                                value={filterUnit}
+                                onChange={handleFilterUnitChange}
+                                label="Filtrar por unidade"
+                            >
+                                <MenuItem value="">Todas</MenuItem>
+                                {getUnitOptions().map((unit) => (
+                                    <MenuItem key={unit} value={unit}>{unit}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            onClick={handleApplyFilters}
+                            startIcon={<FilterListIcon />}
+                            fullWidth
+                        >
+                            Aplicar Filtros
+                        </Button>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Button
+                            variant="outlined"
+                            onClick={handleClearFilters}
+                            startIcon={<ClearIcon />}
+                            fullWidth
+                        >
+                            Limpar Filtros
+                        </Button>
+                    </Grid>
+                </Grid>
+            </AccordionDetails>
+        </Accordion>
+    );
+
     return (
         <Box sx={{ p: 2 }}>
             {lowStockProducts.length > 0 && (
@@ -512,42 +684,51 @@ const ProductList = () => {
                 </Alert>
             </Box>
 
-            <Box display="flex" flexDirection={isMobile ? "column" : "row"} justifyContent="space-between" alignItems={isMobile ? "stretch" : "center"} mb={2}>
-                <TextField
-                    variant="outlined"
-                    size="small"
-                    placeholder="Buscar produto"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    InputProps={{
-                        startAdornment: (
-                            <InputAdornment position="start">
-                                <SearchIcon />
-                            </InputAdornment>
-                        ),
-                    }}
-                    fullWidth={isMobile}
-                    sx={{ mb: isMobile ? 2 : 0 }}
-                />
-                <Box>
-                    <Button
-                        variant="outlined"
-                        onClick={() => setShowArchived(!showArchived)}
-                        sx={{ mr: 1, mb: isMobile ? 1 : 0 }}
-                        fullWidth={isMobile}
-                    >
-                        {showArchived ? 'Mostrar Ativos' : 'Mostrar Arquivados'}
-                    </Button>
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={handleOpenDialog}
-                        fullWidth={isMobile}
-                    >
-                        Adicionar Produto
-                    </Button>
-                </Box>
+            <Box sx={{ mb: 2 }}>
+                <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            variant="outlined"
+                            size="small"
+                            placeholder="Buscar produto"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon />
+                                    </InputAdornment>
+                                ),
+                            }}
+                            fullWidth
+                        />
+                    </Grid>
+                    <Grid item xs={12} md={3}>
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            onClick={handleOpenDialog}
+                            fullWidth
+                        >
+                            Adicionar Produto
+                        </Button>
+                    </Grid>
+                    <Grid item xs={12} md={3}>
+                        <Button
+                            variant="outlined"
+                            onClick={() => {
+                                setShowArchived(!showArchived);
+                                handleApplyFilters();
+                            }}
+                            fullWidth
+                        >
+                            {showArchived ? 'Mostrar Ativos' : 'Mostrar Arquivados'}
+                        </Button>
+                    </Grid>
+                </Grid>
             </Box>
+
+            {renderFilterControls()}
 
             <Divider sx={{ my: 2 }} />
 
@@ -600,6 +781,16 @@ const ProductList = () => {
                     </Table>
                 </TableContainer>
             )}
+
+            <TablePagination
+                component="div"
+                count={pagination.totalItems}
+                page={page}
+                onPageChange={handleChangePage}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+            />
 
             <Dialog open={openDialog} onClose={handleCloseDialog} fullScreen={isMobile}>
                 <DialogTitle>Adicionar Novo Produto</DialogTitle>

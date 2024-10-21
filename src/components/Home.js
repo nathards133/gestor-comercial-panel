@@ -21,6 +21,7 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import PaymentNotificationList from './PaymentNotificationList';
 import { formatarQuantidade } from '../utils/formatters';
+import { useNavigate } from 'react-router-dom';
 
 const Home = () => {
     const [produtos, setProdutos] = useState([]);
@@ -38,6 +39,7 @@ const Home = () => {
     const [topSellingProducts, setTopSellingProducts] = useState([]);
     const paymentMethodRef = useRef(null);
     const [barcodeInput, setBarcodeInput] = useState('');
+    const navigate = useNavigate();
 
     const apiUrl = process.env.REACT_APP_API_URL;
 
@@ -104,6 +106,10 @@ const Home = () => {
                 const resposta = await axios.get(`${apiUrl}/api/products`);
                 setProdutos(Array.isArray(resposta.data.products) ? resposta.data.products : []);
             } catch (erro) {
+                if(erro.response && erro.response.status === 401)
+                {
+                    navigate('/login');
+                }
                 console.error('Erro ao buscar produtos:', erro);
                 setProdutos([]);
             }
