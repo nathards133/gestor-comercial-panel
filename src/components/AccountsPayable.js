@@ -35,6 +35,11 @@ const AccountsPayable = () => {
   const [openInstallmentModal, setOpenInstallmentModal] = useState(false);
   const [currentInstallments, setCurrentInstallments] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [monthlyStats, setMonthlyStats] = useState({
+    totalDue: 0,
+    totalPending: 0,
+    totalPaid: 0
+  });
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -43,6 +48,7 @@ const AccountsPayable = () => {
     fetchAccounts();
     fetchSuppliers();
     fetchProducts();
+    fetchMonthlyStats();
   }, []);
 
   const fetchAccounts = async () => {
@@ -77,6 +83,62 @@ const AccountsPayable = () => {
     }
   };
 
+  const fetchMonthlyStats = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/accounts-payable/monthly-stats`);
+      setMonthlyStats(response.data);
+    } catch (error) {
+      console.error('Erro ao buscar estatísticas mensais:', error);
+    }
+  };
+
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  };
+
+  const renderMonthlyStats = () => (
+    <Box sx={{ 
+      display: 'flex', 
+      gap: 2, 
+      mb: 3, 
+      flexDirection: isMobile ? 'column' : 'row'
+    }}>
+      <Paper sx={{ 
+        flex: 1, 
+        p: 2, 
+        textAlign: 'center',
+        bgcolor: 'primary.main',
+        color: 'white'
+      }}>
+        <Typography variant="h6">Total do Mês</Typography>
+        <Typography variant="h4">{formatCurrency(monthlyStats.totalDue)}</Typography>
+      </Paper>
+      <Paper sx={{ 
+        flex: 1, 
+        p: 2, 
+        textAlign: 'center',
+        bgcolor: 'warning.main',
+        color: 'white'
+      }}>
+        <Typography variant="h6">Pendente</Typography>
+        <Typography variant="h4">{formatCurrency(monthlyStats.totalPending)}</Typography>
+      </Paper>
+      <Paper sx={{ 
+        flex: 1, 
+        p: 2, 
+        textAlign: 'center',
+        bgcolor: 'success.main',
+        color: 'white'
+      }}>
+        <Typography variant="h6">Pago</Typography>
+        <Typography variant="h4">{formatCurrency(monthlyStats.totalPaid)}</Typography>
+      </Paper>
+    </Box>
+  );
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setCurrentAccount(prev => ({ ...prev, [name]: value }));
@@ -105,6 +167,7 @@ const AccountsPayable = () => {
       }
       setOpenDialog(false);
       await fetchAccounts();
+      await fetchMonthlyStats();
       setTabValue(isRecurring ? 1 : isInstallment ? 2 : 0);
     } catch (error) {
       console.error('Erro ao salvar conta:', error);
@@ -146,7 +209,8 @@ const AccountsPayable = () => {
     if (window.confirm('Tem certeza que deseja excluir esta conta?')) {
       try {
         await axios.delete(`${API_URL}/api/accounts-payable/?id=${account._id}&isRecurring=${recurring}`);
-        fetchAccounts();
+        await fetchAccounts();
+        await fetchMonthlyStats();
       } catch (error) {
         console.error('Erro ao excluir conta:', error);
       }
@@ -194,6 +258,7 @@ const AccountsPayable = () => {
         return updatedAccounts;
       });
 
+      await fetchMonthlyStats();
       setSelectedAccounts([]);
     } catch (error) {
       console.error('Erro ao marcar contas como pagas:', error);
@@ -384,7 +449,9 @@ const AccountsPayable = () => {
         <Typography variant="h4" gutterBottom>
           Contas a Pagar
         </Typography>
-        
+
+        {renderMonthlyStats()}
+
         <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', flexDirection: isMobile ? 'column' : 'row' }}>
           <TextField
             variant="outlined"

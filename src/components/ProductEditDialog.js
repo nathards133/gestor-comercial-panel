@@ -22,6 +22,7 @@ const ProductEditDialog = ({ open, onClose, product, onProductUpdated, businessT
         quantity: '',
         unit: '',
         barcode: '',
+        expirationDate: '' 
     });
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
@@ -37,7 +38,7 @@ const ProductEditDialog = ({ open, onClose, product, onProductUpdated, businessT
                 quantity: product.quantity || '',
                 unit: product.unit || getDefaultUnit(businessType),
                 barcode: product.barcode || '',
-                userId: userId
+                expirationDate: product.expirationDate || '' 
             });
         }
     }, [product, businessType, userId]);
@@ -256,6 +257,17 @@ const ProductEditDialog = ({ open, onClose, product, onProductUpdated, businessT
                     onChange={handleInputChange}
                     error={!!errors.quantity}
                     helperText={errors.quantity}
+                />
+                <TextField
+                    margin="dense"
+                    name="expirationDate"
+                    label="Data de Validade"
+                    type="date"
+                    fullWidth
+                    value={editedProduct.expirationDate}
+                    onChange={handleInputChange}
+                    error={!!errors.expirationDate}
+                    helperText={errors.expirationDate}
                 />
                 <TextField
                     select

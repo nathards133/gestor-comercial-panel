@@ -16,7 +16,9 @@ import {
   CssBaseline,
   Divider,
   Menu,
-  MenuItem
+  MenuItem,
+  Badge,
+  Slide
 } from '@mui/material';
 import { 
   ShoppingCart, 
@@ -36,9 +38,8 @@ import {
 } from '@mui/icons-material';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Badge, Dialog, DialogTitle, DialogContent } from '@mui/material';
 import NotificationsIcon from '@mui/icons-material/Notifications';
-// import PaymentNotificationList from './PaymentNotificationList';
+import PaymentNotificationList from './PaymentNotificationList';
 
 const menuItems = [
   { text: 'Caixa', icon: <PointOfSale />, path: '/' },
@@ -56,9 +57,9 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [open, setOpen] = useState(!isMobile);
-  const [notifications] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [notificationCount, setNotificationCount] = useState(0);
-  const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
+  const [notificationAnchorEl, setNotificationAnchorEl] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
 
   useEffect(() => {
@@ -76,9 +77,13 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
     navigate('/login');
   };
 
-  const handleNotificationClick = () => {
-    setNotificationDialogOpen(true);
+  const handleNotificationClick = (event) => {
+    setNotificationAnchorEl(event.currentTarget);
     setNotificationCount(0);
+  };
+
+  const handleCloseNotificationMenu = () => {
+    setNotificationAnchorEl(null);
   };
 
   const handleMenu = (event) => {
@@ -94,7 +99,7 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
   return (
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, backgroundColor: theme.palette.primary.main }}>
         <Toolbar>
           <IconButton
             color="inherit"
@@ -116,6 +121,29 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
               <NotificationsIcon />
             </Badge>
           </IconButton>
+          <Menu
+            anchorEl={notificationAnchorEl}
+            open={Boolean(notificationAnchorEl)}
+            onClose={handleCloseNotificationMenu}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+            PaperProps={{
+              style: {
+                maxHeight: 400,
+                width: '350px',
+                boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+                borderRadius: '8px',
+              },
+            }}
+          >
+            <PaymentNotificationList notifications={notifications} />
+          </Menu>
           <IconButton
             size="large"
             aria-label="account of current user"
@@ -142,7 +170,9 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
             onClose={handleClose}
             PaperProps={{
               style: {
-                marginTop: '8px', // Adiciona um pequeno espaço entre a barra de ferramentas e o menu
+                marginTop: '8px',
+                boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+                borderRadius: '8px',
               },
             }}
           >
@@ -221,12 +251,6 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
           )}
         </Box>
       </Drawer>
-      <Dialog open={notificationDialogOpen} onClose={() => setNotificationDialogOpen(false)}>
-        <DialogTitle>Notificações de Pagamento</DialogTitle>
-        <DialogContent>
-          {/* <PaymentNotificationList notifications={notifications} /> */}
-        </DialogContent>
-      </Dialog>
       <Box component="main" sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` } }}>
         <Toolbar />
         <Outlet />

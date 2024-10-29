@@ -5,7 +5,7 @@ import {
   TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle,
   DialogContent, DialogActions, IconButton, Autocomplete, Chip, Tooltip, InputAdornment,
   useMediaQuery, useTheme, Card, CardContent, Grid, Divider, TablePagination,
-  FormControl, InputLabel, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails
+  FormControl, InputLabel, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails, CircularProgress, Alert
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, WhatsApp as WhatsAppIcon, Search as SearchIcon, Add as AddIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 
@@ -33,6 +33,8 @@ const SupplierManagement = () => {
     totalPages: 1,
     totalItems: 0
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -45,6 +47,23 @@ const SupplierManagement = () => {
     setAppliedFilters(savedFilters);
     setIsFiltersApplied(Object.keys(savedFilters).length > 0);
     fetchSuppliers(savedFilters);
+  }, []);
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+        try {
+            setIsLoading(true);
+            await fetchSuppliers();
+            // Outras chamadas de API, se necessário
+        } catch (error) {
+            console.error('Erro ao carregar dados iniciais:', error);
+            setError('Falha ao carregar dados. Por favor, tente novamente.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    fetchInitialData();
   }, []);
 
   const fetchSuppliers = async (filters = appliedFilters) => {
@@ -305,6 +324,9 @@ const SupplierManagement = () => {
       </Box>
 
       {renderFilterControls()}
+
+      {isLoading && <CircularProgress />}
+      {error && <Alert severity="error">{error}</Alert>}
 
       {isMobile ? (
         suppliers.map(renderSupplierCard)

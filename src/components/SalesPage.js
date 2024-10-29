@@ -49,7 +49,11 @@ const SalesPage = () => {
     });
     const [cachedData, setCachedData] = useState({});
     const [lastStatsFetch, setLastStatsFetch] = useState(null);
-    const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1 });
+    const [pagination, setPagination] = useState({
+        currentPage: 1,
+        totalPages: 1,
+        totalItems: 0
+    });
     const [notifications, setNotifications] = useState([]);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(true);  //ativa e desativa o modal de senha
@@ -62,45 +66,34 @@ const SalesPage = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-    const [dashboardData, setDashboardData] = useState(null);
-
-    const [financialSummary, setFinancialSummary] = useState({
-        grossSales: 0,
-        totalAccountsPayable: 0,
-        netProfit: 0
+    const [currentAccount, setCurrentAccount] = useState({
+        type: '',
+        supplier: '',
+        product: '',
+        quantity: '',
+        totalValue: '',
+        dueDate: null,
+        dueDay: '',
+        description: ''
     });
 
-    const [isFinancialSummaryLoading, setIsFinancialSummaryLoading] = useState(true);
+    const [accountsStats, setAccountsStats] = useState({
+        totalExpenses: 0,
+        totalPendingExpenses: 0,
+        totalPaidExpenses: 0,
+        totalPendingExpensesCount: 0
+    });
 
-    const fetchFinancialSummary = useCallback(async () => {
-        setIsFinancialSummaryLoading(true);
-        try {
-            const response = await axios.get(`${API_URL}/api/sales/financial-summary`);
-            setFinancialSummary(response.data);
-        } catch (error) {
-            console.error('Erro ao buscar resumo financeiro:', error);
-            setFinancialSummary({ grossSales: 0, totalAccountsPayable: 0, netProfit: 0 });
-        } finally {
-            setIsFinancialSummaryLoading(false);
-        }
+    const [totalSalesByPaymentMethod, setTotalSalesByPaymentMethod] = useState({});
+
+    const calculateSalesByPaymentMethod = useCallback((salesData) => {
+        const methodTotals = salesData.reduce((acc, sale) => {
+            const method = sale.paymentMethod || 'Não especificado';
+            acc[method] = (acc[method] || 0) + (sale.totalValue || 0);
+            return acc;
+        }, {});
+        setTotalSalesByPaymentMethod(methodTotals);
     }, []);
-
-    useEffect(() => {
-        fetchFinancialSummary();
-    }, [fetchFinancialSummary]);
-
-    const fetchDashboardData = useCallback(async () => {
-        try {
-            const response = await axios.get(`${API_URL}/api/sales/dashboard`);
-            setDashboardData(response.data);
-        } catch (error) {
-            console.error('Erro ao buscar dados do dashboard:', error);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchDashboardData();
-    }, [fetchDashboardData]);
 
     const renderFinancialCard = (title, value, isPositive) => (
         <Card sx={{ mb: 2, bgcolor: isPositive ? 'success.light' : 'error.light' }}>
@@ -120,22 +113,57 @@ const SalesPage = () => {
         setError(null);
         try {
             const response = await axios.get(`${API_URL}/api/sales`, {
-                params: { period }
+                params: { 
+                    period,
+                    page: page + 1,
+                    limit: rowsPerPage
+                }
             });
-            setSales(response.data.sales);
-            setPeriodInfo(response.data.periodInfo);
+            
+            if (response.data) {
+                setSales(response.data.sales || []);
+                setPeriodInfo(response.data.periodInfo || null);
+                calculateSalesByPaymentMethod(response.data.sales || []);
+                
+                setPagination({
+                    currentPage: response.data.pagination?.currentPage || 1,
+                    totalPages: response.data.pagination?.totalPages || 1,
+                    totalItems: response.data.pagination?.totalItems || response.data.sales?.length || 0
+                });
+            }
+            
         } catch (error) {
             console.error('Erro ao buscar vendas:', error);
             setError('Falha ao carregar as vendas. Por favor, tente novamente.');
             setSales([]);
+            setTotalSalesByPaymentMethod({});
+            setPagination({
+                currentPage: 1,
+                totalPages: 1,
+                totalItems: 0
+            });
         } finally {
             setLoading(false);
+        }
+    }, [calculateSalesByPaymentMethod, page, rowsPerPage]);
+
+    const fetchAccountsStats = useCallback(async () => {
+        try {
+            const response = await axios.get(`${API_URL}/api/accounts-payable/monthly-stats`);
+            setAccountsStats({
+                totalExpenses: response.data.totalDue,
+                totalPendingExpenses: response.data.totalPending,
+                totalPaidExpenses: response.data.totalPaid,
+                totalPendingExpensesCount: response.data.pendingCount || 0
+            });
+        } catch (error) {
+            console.error('Erro ao buscar estatísticas de contas:', error);
         }
     }, []);
 
     useEffect(() => {
-        fetchSales('day');
-    }, [fetchSales]);
+        // Não fazer nada aqui, as requisições serão feitas após a validação da senha
+    }, []);
 
     const fetchStats = useCallback(async () => {
         const now = new Date();
@@ -156,11 +184,11 @@ const SalesPage = () => {
         }
     }, []);
 
-    useEffect(() => {
-        fetchStats();
-        const interval = setInterval(fetchStats, 5 * 60 * 1000);
-        return () => clearInterval(interval);
-    }, [fetchStats]);
+    // useEffect(() => {
+    //     fetchStats();
+    //     const interval = setInterval(fetchStats, 5 * 60 * 1000);
+    //     return () => clearInterval(interval);
+    // }, [fetchStats]);
 
     useEffect(() => {
         // Função para buscar notificações
@@ -174,7 +202,7 @@ const SalesPage = () => {
         // };
 
         // fetchNotifications();
-        // Atualiza as notificações a cada 5 minutos
+        // Atualiza as notificaões a cada 5 minutos
         // const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
 
         // return () => clearInterval(interval);
@@ -260,16 +288,38 @@ const SalesPage = () => {
 
     const handlePasswordSubmit = async (password) => {
         try {
-            const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/verify-password`, { password });
+            const response = await axios.post(`${API_URL}/api/verify-password`, { password });
             if (response.data.isValid) {
                 setIsPasswordModalOpen(false);
-                setIsContentVisible(true);  // Adicione esta linha
+                setIsContentVisible(true);
+                
+                // Iniciar as requisições após a validação da senha
+                try {
+                    setLoading(true);
+                    await Promise.all([
+                        fetchSales('day'),
+                        fetchAccountsStats()
+                    ]);
+                } catch (error) {
+                    console.error('Erro ao carregar dados iniciais:', error);
+                    setError('Falha ao carregar os dados. Por favor, tente novamente.');
+                } finally {
+                    setLoading(false);
+                }
             } else {
-                alert('Senha incorreta');
+                setSnackbar({
+                    open: true,
+                    message: 'Senha incorreta',
+                    severity: 'error'
+                });
             }
         } catch (error) {
             console.error('Erro ao verificar senha:', error);
-            alert('Erro ao verificar senha');
+            setSnackbar({
+                open: true,
+                message: 'Erro ao verificar senha',
+                severity: 'error'
+            });
         }
     };
 
@@ -327,11 +377,15 @@ const SalesPage = () => {
 
     const handleChangePage = (event, newPage) => {
         setPage(newPage);
+        const periods = ['day', 'week', 'month'];
+        fetchSales(periods[tabValue]);
     };
 
     const handleChangeRowsPerPage = (event) => {
         setRowsPerPage(parseInt(event.target.value, 10));
         setPage(0);
+        const periods = ['day', 'week', 'month'];
+        fetchSales(periods[tabValue]);
     };
 
     const paginatedSales = useMemo(() => {
@@ -379,6 +433,14 @@ const SalesPage = () => {
         </Box>
     );
 
+    const calculateNetProfit = useMemo(() => {
+        const totalNetProfit = totalSalesValue - accountsStats.totalExpenses;
+        const totalProfitMargin = totalSalesValue > 0 
+            ? (totalNetProfit / totalSalesValue) * 100 
+            : 0;
+        return { totalNetProfit, totalProfitMargin };
+    }, [totalSalesValue, accountsStats.totalExpenses]);
+
     return (
         <Box sx={{ p: 2 }}>
             <PasswordModal
@@ -392,159 +454,300 @@ const SalesPage = () => {
             {isPasswordModalOpen ? (
                 renderSkeleton()
             ) : (
-                <div inert={!isContentVisible}>
-                    <Typography variant={isMobile ? "h5" : "h4"} gutterBottom align="center">
-                        Dashboard de Vendas
-                    </Typography>
-
-                    <Alert severity="info" align="center" sx={{ mb: 2 }}>
-                        Esta página é destinada ao administrador do sistema, oferecendo uma visão geral do desempenho do seu negócio. Para garantir uma análise precisa e confiável, mantenha o sistema sempre atualizado. Assim, você poderá identificar oportunidades e aprimorar continuamente os resultados.
-                    </Alert>
-
-                    <Grid container spacing={2} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                            <Card sx={{ bgcolor: '#e3f2fd', height: '100%' }}>
-                                <CardContent>
-                                    <Typography variant={isMobile ? "subtitle1" : "h6"}>Total de Vendas</Typography>
-                                    <Typography variant={isMobile ? "h5" : "h4"}>
-                                        R$ {totalSalesValue.toFixed(2)}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Card sx={{ bgcolor: '#e8f5e9' }}>
-                                <CardContent>
-                                    <Typography variant="h6">Número de Vendas</Typography>
-                                    <Typography variant="h4">
-                                        {totalSalesCount}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Card sx={{ bgcolor: '#fff3e0' }}>
-                                <CardContent>
-                                    <Typography variant="h6">Produto Mais Vendido</Typography>
-                                    <Typography variant="h4">
-                                        {topSellingProduct}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    </Grid>
-
-                    {/* Novos cards de resumo financeiro */}
-                    <Grid container spacing={2} sx={{ mb: 3 }}>
-                        <Grid item xs={12} sm={4}>
-                            <Card sx={{ bgcolor: '#e8f5e9' }}>
-                                <CardContent>
-                                    <Typography variant={isMobile ? "subtitle1" : "h6"}>Vendas Brutas</Typography>
-                                    <Typography variant={isMobile ? "h5" : "h4"}>
-                                        R$ {(financialSummary?.grossSales || 0).toFixed(2)}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Card sx={{ bgcolor: '#ffebee' }}>
-                                <CardContent>
-                                    <Typography variant={isMobile ? "subtitle1" : "h6"}>Contas a Pagar</Typography>
-                                    <Typography variant={isMobile ? "h5" : "h4"}>
-                                        R$ {(financialSummary?.totalAccountsPayable || 0).toFixed(2)}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Card sx={{ bgcolor: '#e3f2fd' }}>
-                                <CardContent>
-                                    <Typography variant={isMobile ? "subtitle1" : "h6"}>Lucro Líquido</Typography>
-                                    <Typography variant={isMobile ? "h5" : "h4"}>
-                                        R$ {(financialSummary?.netProfit || 0).toFixed(2)}
-                                    </Typography>
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    </Grid>
-
-                    <Tabs value={tabValue} onChange={handleTabChange} centered>
-                        <Tab label="Dia" />
-                        <Tab label="Semana" />
-                        <Tab label="Mês" />
-                    </Tabs>
-
+                <div style={{ 
+                    display: isContentVisible ? 'block' : 'none',
+                    opacity: isContentVisible ? 1 : 0,
+                    transition: 'opacity 0.3s ease-in-out'
+                }}>
                     {loading ? (
                         <CircularProgress />
                     ) : error ? (
                         <Alert severity="error">{error}</Alert>
                     ) : (
+                        // Conteúdo principal
                         <>
-                            {periodInfo && (
-                                <Typography variant="subtitle1" align="center" sx={{ mt: 2, mb: 2 }}>
-                                    {periodInfo.label}
-                                </Typography>
-                            )}
-                            {sales.length === 0 ? (
-                                <Alert severity="info">Nenhuma venda encontrada para este período.</Alert>
+                            <Typography variant={isMobile ? "h5" : "h4"} gutterBottom align="center">
+                                Dashboard de Vendas
+                            </Typography>
+
+                            <Alert severity="info" align="center" sx={{ mb: 2 }}>
+                                Esta página é destinada ao administrador do sistema, oferecendo uma visão geral do desempenho do seu negócio. Para garantir uma análise precisa e confiável, mantenha o sistema sempre atualizado. Assim, você poderá identificar oportunidades e aprimorar continuamente os resultados.
+                            </Alert>
+
+                            <Grid container spacing={2} sx={{ mb: 3 }}>
+                                <Grid item xs={12} sm={4}>
+                                    <Card sx={{ bgcolor: '#e3f2fd', height: '100%' }}>
+                                        <CardContent>
+                                            <Typography variant={isMobile ? "subtitle1" : "h6"}>Total de Vendas</Typography>
+                                            <Typography variant={isMobile ? "h5" : "h4"}>
+                                                R$ {totalSalesValue.toFixed(2)}
+                                            </Typography>
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <Card sx={{ bgcolor: '#e8f5e9' }}>
+                                        <CardContent>
+                                            <Typography variant="h6">Número de Vendas</Typography>
+                                            <Typography variant="h4">
+                                                {totalSalesCount}
+                                            </Typography>
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <Card sx={{ bgcolor: '#fff3e0' }}>
+                                        <CardContent>
+                                            <Typography variant="h6">Produto Mais Vendido</Typography>
+                                            <Typography variant="h4">
+                                                {topSellingProduct}
+                                            </Typography>
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+                            </Grid>
+
+                            {/* Novos cards de resumo financeiro */}
+                            <Grid container spacing={2} sx={{ mb: 3 }}>
+                                <Grid item xs={12} sm={4}>
+                                    <Card sx={{ bgcolor: '#e8f5e9', height: '100%' }}>
+                                        <CardContent>
+                                            <Typography variant={isMobile ? "subtitle1" : "h6"}>
+                                                Vendas Brutas (Mês Atual)
+                                            </Typography>
+                                            <Typography variant={isMobile ? "h5" : "h4"}>
+                                                R$ {totalSalesValue.toFixed(2)}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                {totalSalesCount} transações
+                                            </Typography>
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <Card sx={{ bgcolor: '#ffebee', height: '100%' }}>
+                                        <CardContent>
+                                            <Typography variant={isMobile ? "subtitle1" : "h6"}>
+                                                Contas a Pagar
+                                            </Typography>
+                                            <Typography variant={isMobile ? "h5" : "h4"}>
+                                                R$ {accountsStats.totalExpenses.toFixed(2)}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                Pendente: R$ {accountsStats.totalPendingExpenses.toFixed(2)}
+                                            </Typography>
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <Card sx={{ 
+                                        bgcolor: calculateNetProfit.totalNetProfit >= 0 ? '#e3f2fd' : '#ffebee',
+                                        height: '100%' 
+                                    }}>
+                                        <CardContent>
+                                            <Typography variant={isMobile ? "subtitle1" : "h6"}>
+                                                Lucro Líquido
+                                            </Typography>
+                                            <Typography 
+                                                variant={isMobile ? "h5" : "h4"}
+                                                color={calculateNetProfit.totalNetProfit >= 0 ? 'success.main' : 'error.main'}
+                                            >
+                                                R$ {calculateNetProfit.totalNetProfit.toFixed(2)}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                Margem: {calculateNetProfit.totalProfitMargin.toFixed(1)}%
+                                            </Typography>
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+                            </Grid>
+
+                            {/* Adicione um novo card para detalhes de pagamento */}
+                            <Grid container spacing={2} sx={{ mb: 3 }}>
+                                <Grid item xs={12}>
+                                    <Card sx={{ bgcolor: '#fafafa' }}>
+                                        <CardContent>
+                                            <Typography variant="h6" gutterBottom>
+                                                Status das Contas
+                                            </Typography>
+                                            <Grid container spacing={2}>
+                                                <Grid item xs={6} sm={3}>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        Total a Pagar
+                                                    </Typography>
+                                                    <Typography variant="h6">
+                                                        R$ {accountsStats.totalExpenses.toFixed(2)}
+                                                    </Typography>
+                                                </Grid>
+                                                <Grid item xs={6} sm={3}>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        Pendente
+                                                    </Typography>
+                                                    <Typography variant="h6">
+                                                        R$ {accountsStats.totalPendingExpenses.toFixed(2)}
+                                                    </Typography>
+                                                </Grid>
+                                                <Grid item xs={6} sm={3}>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        Pago
+                                                    </Typography>
+                                                    <Typography variant="h6">
+                                                        R$ {accountsStats.totalPaidExpenses.toFixed(2)}
+                                                    </Typography>
+                                                </Grid>
+                                                <Grid item xs={6} sm={3}>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        Contas Pendentes
+                                                    </Typography>
+                                                    <Typography variant="h6">
+                                                        {accountsStats.totalPendingExpensesCount}
+                                                    </Typography>
+                                                </Grid>
+                                            </Grid>
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+                            </Grid>
+
+                            {/* Adicionar um card extra para detalhes de pagamento */}
+                            <Grid container spacing={2} sx={{ mb: 3 }}>
+                                <Grid item xs={12}>
+                                    <Card sx={{ bgcolor: '#fafafa' }}>
+                                        <CardContent>
+                                            <Typography variant="h6" gutterBottom>
+                                                Vendas por Método de Pagamento
+                                            </Typography>
+                                            <Grid container spacing={2}>
+                                                {Object.entries(totalSalesByPaymentMethod).map(([method, value]) => (
+                                                    <Grid item xs={6} sm={3} key={method}>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            {method}
+                                                        </Typography>
+                                                        <Typography variant="h6">
+                                                            R$ {value.toFixed(2)}
+                                                        </Typography>
+                                                    </Grid>
+                                                ))}
+                                                {Object.keys(totalSalesByPaymentMethod).length === 0 && (
+                                                    <Grid item xs={12}>
+                                                        <Typography variant="body2" color="text.secondary" align="center">
+                                                            Nenhuma venda registrada no período
+                                                        </Typography>
+                                                    </Grid>
+                                                )}
+                                            </Grid>
+                                        </CardContent>
+                                    </Card>
+                                </Grid>
+                            </Grid>
+
+                            <Tabs value={tabValue} onChange={handleTabChange} centered>
+                                <Tab label="Dia" />
+                                <Tab label="Semana" />
+                                <Tab label="Mês" />
+                            </Tabs>
+
+                            {loading ? (
+                                <CircularProgress />
+                            ) : error ? (
+                                <Alert severity="error">{error}</Alert>
                             ) : (
-                            <TableContainer component={Paper} sx={{ mt: 2, overflowX: 'auto' }}>
-                                <Table size="medium">
+                                <>
+                                    {periodInfo && (
+                                        <Typography variant="subtitle1" align="center" sx={{ mt: 2, mb: 2 }}>
+                                            {periodInfo.label}
+                                        </Typography>
+                                    )}
+                                    {sales.length === 0 ? (
+                                        <Alert severity="info">Nenhuma venda encontrada para este período.</Alert>
+                                    ) : (
+                                    <TableContainer component={Paper} sx={{ mt: 2, overflowX: 'auto' }}>
+                                        <Table size="medium">
+                                            <TableHead>
+                                                <TableRow>
+                                                    <TableCell>Data</TableCell>
+                                                    <TableCell>Produtos</TableCell>
+                                                    <TableCell align="right">Valor Total</TableCell>
+                                                    <TableCell>Método de Pagamento</TableCell>
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {sales.map((sale) => (
+                                                    <TableRow key={sale._id}>
+                                                        <TableCell>{new Date(sale.createdAt).toLocaleString()}</TableCell>
+                                                        <TableCell>{renderSaleItems(sale)}</TableCell>
+                                                        <TableCell align="right">R$ {sale.totalValue?.toFixed(2) || '0.00'}</TableCell>
+                                                        <TableCell>{sale.paymentMethod || 'Não especificado'}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                        
+                                        <TablePagination
+                                            component="div"
+                                            count={pagination.totalItems || 0}
+                                            page={Math.min(page, Math.max(0, pagination.totalPages - 1))}
+                                            onPageChange={handleChangePage}
+                                            rowsPerPage={rowsPerPage}
+                                            onRowsPerPageChange={handleChangeRowsPerPage}
+                                            rowsPerPageOptions={[5, 10, 25, 50]}
+                                            labelRowsPerPage="Itens por página"
+                                            labelDisplayedRows={({ from, to, count }) => 
+                                                `${from}-${to} de ${count !== -1 ? count : `mais de ${to}`}`
+                                            }
+                                        />
+                                    </TableContainer>
+                                    )}
+                                </>
+                            )}
+
+                            {/* <Typography variant={isMobile ? "subtitle1" : "h6"} sx={{ mt: 4, mb: 2, textAlign: 'center' }}>
+                                Estatísticas de Produtos
+                            </Typography> */}
+                            <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+                                {/* <Table size={isMobile ? "small" : "medium"}>
                                     <TableHead>
                                         <TableRow>
-                                            <TableCell>Data</TableCell>
-                                            <TableCell>Produtos</TableCell>
+                                            <TableCell>Produto</TableCell>
+                                            <TableCell align="right">Quantidade Vendida</TableCell>
                                             <TableCell align="right">Valor Total</TableCell>
-                                            <TableCell>Método de Pagamento</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                        {paginatedSales.map((sale) => (
-                                            <TableRow key={sale._id}>
-                                                <TableCell>{new Date(sale.createdAt).toLocaleString()}</TableCell>
-                                                <TableCell>{renderSaleItems(sale)}</TableCell>
-                                                <TableCell align="right">R$ {sale.totalValue?.toFixed(2) || '0.00'}</TableCell>
-                                                <TableCell>{sale.paymentMethod || 'Não especificado'}</TableCell>
+                                    {stats.productStats && stats.productStats.length > 0 ? (
+                                        stats.productStats.map((stat) => (
+                                            <TableRow key={stat._id}>
+                                                <TableCell>{stat.name}</TableCell>
+                                                <TableCell align="right">{stat.totalQuantity}</TableCell>
+                                                <TableCell align="right">R$ {stat.totalValue?.toFixed(2) || '0.00'}</TableCell>
                                             </TableRow>
-                                        ))}
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={3} align="center">Nenhuma estatística de produto disponível</TableCell>
+                                        </TableRow>
+                                    )}
                                     </TableBody>
-                                </Table>
-                                </TableContainer>
-                            )}
+                                </Table> */}
+                            </TableContainer>
                         </>
                     )}
-
-                    {/* <Typography variant={isMobile ? "subtitle1" : "h6"} sx={{ mt: 4, mb: 2, textAlign: 'center' }}>
-                        Estatísticas de Produtos
-                    </Typography> */}
-                    <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-                        {/* <Table size={isMobile ? "small" : "medium"}>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Produto</TableCell>
-                                    <TableCell align="right">Quantidade Vendida</TableCell>
-                                    <TableCell align="right">Valor Total</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                            {stats.productStats && stats.productStats.length > 0 ? (
-                                stats.productStats.map((stat) => (
-                                    <TableRow key={stat._id}>
-                                        <TableCell>{stat.name}</TableCell>
-                                        <TableCell align="right">{stat.totalQuantity}</TableCell>
-                                        <TableCell align="right">R$ {stat.totalValue?.toFixed(2) || '0.00'}</TableCell>
-                                    </TableRow>
-                                ))
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={3} align="center">Nenhuma estatística de produto disponível</TableCell>
-                                </TableRow>
-                            )}
-                            </TableBody>
-                        </Table> */}
-                    </TableContainer>
                 </div>
             )}
+
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={6000}
+                onClose={() => setSnackbar({ ...snackbar, open: false })}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert 
+                    onClose={() => setSnackbar({ ...snackbar, open: false })} 
+                    severity={snackbar.severity}
+                >
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };

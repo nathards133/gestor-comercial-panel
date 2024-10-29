@@ -50,7 +50,6 @@ import {
     FilterList as FilterListIcon,
     Clear as ClearIcon,
 } from '@mui/icons-material';
-import ProductImport from './ProductImport';
 import { useAuth } from '../contexts/AuthContext';
 import WarningMessage from './WarningMessage';
 import ProductEditDialog from './ProductEditDialog';
@@ -58,6 +57,10 @@ import CropFreeIcon from '@mui/icons-material/CropFree';
 import Quagga from 'quagga';
 import { Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { ptBR } from 'date-fns/locale'; 
+import { format, parse } from 'date-fns';
 
 const ProductList = () => {
     const [products, setProducts] = useState([]);
@@ -98,6 +101,7 @@ const ProductList = () => {
     const [filterUnit, setFilterUnit] = useState('');
     const [appliedFilters, setAppliedFilters] = useState({});
     const [isFiltersApplied, setIsFiltersApplied] = useState(false);
+    const [expirationDate, setExpirationDate] = useState(null);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -167,7 +171,7 @@ const ProductList = () => {
                     });
                 }
             } else {
-                console.error('A resposta da API não cont��m um array de produtos:', res.data);
+                console.error('A resposta da API não contm um array de produtos:', res.data);
                 setProducts([]);
             }
         } catch (error) {
@@ -182,14 +186,14 @@ const ProductList = () => {
 
     const handleOpenDialog = () => {
         setOpenDialog(true);
-        setErrors({ name: '', price: '', quantity: '', barcode: '', unit: '' });
-        setNewProduct({ name: '', price: '', quantity: '', barcode: '', unit: '' });
+        setErrors({ name: '', price: '', quantity: '', barcode: '', unit: '', expirationDate: '' });
+        setNewProduct({ name: '', price: '', quantity: '', barcode: '', unit: '', expirationDate: '' });
     };
 
     const handleCloseDialog = () => {
         setOpenDialog(false);
-        setNewProduct({ name: '', price: '', quantity: '', barcode: '', unit: '' });
-        setErrors({ name: '', price: '', quantity: '', barcode: '', unit: '' });
+        setNewProduct({ name: '', price: '', quantity: '', barcode: '', unit: '', expirationDate: '' });
+        setErrors({ name: '', price: '', quantity: '', barcode: '', unit: '', expirationDate: '' });
     };
 
     const handleInputChange = (e) => {
@@ -234,7 +238,8 @@ const ProductList = () => {
                     price: parseFloat(newProduct.price),
                     quantity: parseFloat(newProduct.quantity),
                     barcode: newProduct.barcode,
-                    unit: newProduct.unit
+                    unit: newProduct.unit,
+                    expirationDate: newProduct.expirationDate
                 };
                 await axios.post(`${apiUrl}/api/products`, productData);
                 setLoading(false);
@@ -543,6 +548,11 @@ const ProductList = () => {
         setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     };
 
+    
+    const handleDateChange = (date) => {
+        setNewProduct((prev) => ({ ...prev, expirationDate: date ? date.toISOString() : null }));
+    };
+
     const handleFilterUnitChange = (event) => {
         setFilterUnit(event.target.value);
     };
@@ -748,7 +758,7 @@ const ProductList = () => {
                                 <TableCell>Nome</TableCell>
                                 <TableCell align="right">Preço</TableCell>
                                 <TableCell align="right">Quantidade</TableCell>
-                                <TableCell align="right">Unidade</TableCell>
+                                <TableCell align="right">Data de Validade</TableCell> {/* Novo cabeçalho para data de validade */}
                                 <TableCell align="right">Ações</TableCell>
                             </TableRow>
                         </TableHead>
@@ -760,7 +770,7 @@ const ProductList = () => {
                                     </TableCell>
                                     <TableCell align="right">R$ {parseFloat(product.price).toFixed(2)}</TableCell>
                                     <TableCell align="right">{product.quantity}</TableCell>
-                                    <TableCell align="right">{product.unit}</TableCell>
+                                    <TableCell align="right">{product.expirationDate ? new Date(product.expirationDate).toLocaleDateString() : 'N/A'}</TableCell> {/* Exibe a data de validade */}
                                     <TableCell align="right">
                                         <Button onClick={() => handleEditProduct(product)}>
                                             Editar
@@ -888,6 +898,16 @@ const ProductList = () => {
                             </MenuItem>
                         ))}
                     </TextField>
+
+                    <LocalizationProvider dateAdapter={AdapterDateFns} locale={ptBR}> {/* Envolvendo com LocalizationProvider */}
+                        <DatePicker
+                            label="Data de Validade"
+                            value={newProduct.expirationDate ? parse(newProduct.expirationDate, 'dd/MM/yyyy', new Date()) : null}
+                            onChange={handleDateChange}
+                            format="dd/MM/yyyy"
+                            renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
+                        />
+                    </LocalizationProvider>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleCloseDialog}>Cancelar</Button>
@@ -908,7 +928,7 @@ const ProductList = () => {
                 </Alert>
             </Snackbar>
 
-            {!user.role === 'admin' && <ProductImport onImportComplete={handleImportComplete} />}
+            {/* {!user.role === 'admin' && <ProductImport onImportComplete={handleImportComplete} />} */}
 
             <ProductEditDialog
                 open={!!editingProduct}
@@ -916,7 +936,7 @@ const ProductList = () => {
                 product={editingProduct}
                 onProductUpdated={handleProductUpdated}
                 businessType={user.businessType}
-                userId={user._id} // Passando o userId para o ProductEditDialog
+                userId={user._id}
             />
 
             {/* Diálogo para o leitor de código de barras */}

@@ -22,6 +22,7 @@ import { useAuth } from '../contexts/AuthContext';
 import PaymentNotificationList from './PaymentNotificationList';
 import { formatarQuantidade } from '../utils/formatters';
 import { useNavigate } from 'react-router-dom';
+import NotificationIcon from './NotificationIcon';
 
 const Home = () => {
     const [produtos, setProdutos] = useState([]);
@@ -120,7 +121,35 @@ const Home = () => {
         if (produtoInputRef.current) {
             produtoInputRef.current.focus();
         }
-    }, [apiUrl, updateTopSellingProducts]);
+    }, [apiUrl, updateTopSellingProducts, navigate, produtoInputRef]);
+
+    // const fetchNotifications = useCallback(async () => {
+    //     try {
+    //         const response = await axios.get(`${apiUrl}/api/payments/notifications`);
+    //         setNotifications(response.data);
+    //     } catch (error) {
+    //         console.error('Erro ao buscar notificações:', error);
+    //     }
+    // }, [apiUrl]);
+
+    // useEffect(() => {
+    //     fetchNotifications();
+    //     const interval = setInterval(fetchNotifications, 30000); // Atualiza a cada 30 segundos
+    //     return () => clearInterval(interval);
+    // }, [fetchNotifications]);
+
+    const addNotification = useCallback((sale) => {
+        const newNotification = {
+            message: `Venda realizada: R$ ${sale.total.toFixed(2)}`,
+            data: {
+                amount: sale.total,
+                paymentMethod: sale.paymentMethod
+            },
+            createdAt: new Date().toISOString(),
+            read: false
+        };
+        setNotifications(prev => [newNotification, ...prev]);
+    }, []);
 
     useEffect(() => {
         // const fetchNotifications = async () => {
@@ -252,6 +281,8 @@ const Home = () => {
             if (produtoInputRef.current) {
                 produtoInputRef.current.focus();
             }
+            const saleTotal = carrinho.reduce((acc, item) => acc + item.price * item.quantidade, 0);
+            addNotification({ total: saleTotal, paymentMethod });
         } catch (error) {
             console.error('Erro ao finalizar venda:', error);
             setSnackbar({
@@ -262,7 +293,7 @@ const Home = () => {
         } finally {
             setIsFinalizingVenda(false);
         }
-    }, [carrinho, paymentMethod, apiUrl, updateTopSellingProducts]);
+    }, [carrinho, paymentMethod, apiUrl, updateTopSellingProducts, addNotification]);
 
     const handleAutocompleteChange = useCallback((event, newValue) => {
         setProdutoSelecionado(newValue);
