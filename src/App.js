@@ -14,6 +14,8 @@ import Login from './components/Login';
 import ReportsPage from './components/ReportsPage';
 import Integrations from './components/Integrations';
 import AccountsPayable from './components/AccountsPayable';
+import GenerateRegisterLink from './components/GenerateRegisterLink';
+import Register from './components/Register';
 const lightTheme = createTheme({
   palette: {
     mode: 'light',
@@ -44,7 +46,7 @@ const darkTheme = createTheme({
   },
 });
 
-const ProtectedRoute = ({ children }) => {
+const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user, loading } = useAuth();
   
   if (loading) {
@@ -53,6 +55,10 @@ const ProtectedRoute = ({ children }) => {
 
   if (!user) {
     return <Navigate to="/login" />;
+  }
+
+  if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+    return <Navigate to="/" />;
   }
 
   return children;
@@ -72,6 +78,7 @@ function App() {
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
             <Route path="/" element={
               <ProtectedRoute>
                 <Layout toggleTheme={toggleTheme} isDarkMode={isDarkMode} />
@@ -86,6 +93,11 @@ function App() {
               <Route path="reports" element={<ReportsPage />} />
               <Route path="integrations" element={<Integrations />} />
               <Route path="accounts-payable" element={<AccountsPayable />} />
+              <Route path="admin/generate-register-link" element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <GenerateRegisterLink />
+                </ProtectedRoute>
+              } />
             </Route>
           </Routes>
         </Router>

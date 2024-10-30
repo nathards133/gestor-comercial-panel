@@ -34,7 +34,8 @@ import {
   AccountCircle,
   ExitToApp,
   AttachMoney,
-  RequestPage
+  RequestPage,
+  PersonAdd
 } from '@mui/icons-material';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -48,7 +49,6 @@ const menuItems = [
   { text: 'Relatórios', icon: <Assessment />, path: '/reports' },
   { text: 'Fornecedores', icon: <Store />, path: '/suppliers' },
   { text: 'Contas a Pagar', icon: <RequestPage />, path: '/accounts-payable' },
-  { text: 'Integrações', icon: <Settings />, path: '/integrations' },
 ];
 
 const Layout = ({ toggleTheme, isDarkMode }) => {
@@ -211,35 +211,81 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
         }}>
           <List>
             {menuItems.map((item) => (
-              <ListItem 
+              <ListItemButton
                 key={item.path}
-                component={Link} 
+                component={Link}
                 to={item.path}
-                disablePadding
+                sx={{
+                  minHeight: 48,
+                  justifyContent: open && !isMobile ? 'initial' : 'center',
+                  px: 2.5,
+                }}
               >
+                <ListItemIcon
+                  sx={{
+                    minWidth: 0,
+                    mr: open && !isMobile ? 3 : 'auto',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText 
+                  primary={item.text}
+                  sx={{ opacity: open && !isMobile ? 1 : 0 }}
+                />
+              </ListItemButton>
+            ))}
+            {user?.role === 'admin' && (
+              <>
                 <ListItemButton
+                  component={Link}
+                  to="/integrations"
                   sx={{
                     minHeight: 48,
-                    justifyContent: open && !isMobile ? 'initial' : 'center',
+                    justifyContent: open ? 'initial' : 'center',
                     px: 2.5,
                   }}
                 >
                   <ListItemIcon
                     sx={{
                       minWidth: 0,
-                      mr: open && !isMobile ? 3 : 'auto',
+                      mr: open ? 3 : 'auto',
                       justifyContent: 'center',
                     }}
                   >
-                    {item.icon}
+                    <Settings />
                   </ListItemIcon>
                   <ListItemText 
-                    primary={item.text} 
-                    sx={{ opacity: open && !isMobile ? 1 : 0 }} 
+                    primary="Integrações" 
+                    sx={{ opacity: open ? 1 : 0 }}
                   />
                 </ListItemButton>
-              </ListItem>
-            ))}
+                <ListItemButton
+                  component={Link}
+                  to="/admin/generate-register-link"
+                  sx={{
+                    minHeight: 48,
+                    justifyContent: open ? 'initial' : 'center',
+                    px: 2.5,
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 0,
+                      mr: open ? 3 : 'auto',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <PersonAdd />
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary="Gerar Link de Registro" 
+                    sx={{ opacity: open ? 1 : 0 }}
+                  />
+                </ListItemButton>
+              </>
+            )}
           </List>
           {!isMobile && (
             <Box>

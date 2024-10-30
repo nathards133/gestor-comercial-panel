@@ -23,6 +23,7 @@ import PaymentNotificationList from './PaymentNotificationList';
 import { formatarQuantidade } from '../utils/formatters';
 import { useNavigate } from 'react-router-dom';
 import NotificationIcon from './NotificationIcon';
+import Quagga from 'quagga';
 
 const Home = () => {
     const [produtos, setProdutos] = useState([]);
@@ -65,6 +66,9 @@ const Home = () => {
 
     const [isFinalizingVenda, setIsFinalizingVenda] = useState(false);
 
+    const [isScannerActive, setIsScannerActive] = useState(false);
+    const scannerRef = useRef(null);
+
     const updateTopSellingProducts = useCallback(async () => {
     try {
         const response = await axios.get(`${apiUrl}/api/products/top-selling`);
@@ -80,21 +84,21 @@ const Home = () => {
         const fetchMostUsedPaymentMethod = async () => {
             try {
                 const response = await axios.get(`${apiUrl}/api/sales/most-used-payment-method`);
-                const method = response.data.method;
+                const method = response.data.method || ''; // Garante valor padrão
 
                 // Verifica se o método armazenado é diferente do que está sendo recuperado
-                const storedMethod = localStorage.getItem('mostUsedPaymentMethod');
+                const storedMethod = localStorage.getItem('mostUsedPaymentMethod') || '';
                 if (method !== storedMethod) {
                     setMostUsedPaymentMethod(method);
-                    setPaymentMethod(method); // Pré-seleciona o método mais usado
-                    localStorage.setItem('mostUsedPaymentMethod', method); // Armazena no localStorage
+                    setPaymentMethod(method); // Garante que seja string
+                    localStorage.setItem('mostUsedPaymentMethod', method);
                 } else {
-                    // Se o método já estiver armazenado, apenas define o estado
                     setMostUsedPaymentMethod(storedMethod);
                     setPaymentMethod(storedMethod);
                 }
             } catch (error) {
                 console.error('Erro ao buscar método de pagamento mais usado:', error);
+                setPaymentMethod(''); // Em caso de erro, define como string vazia
             }
         };
 
@@ -362,7 +366,7 @@ const Home = () => {
 
     const handlePaymentMethodChange = (event) => {
         const selectedMethod = event.target.value;
-        setPaymentMethod(selectedMethod);
+        setPaymentMethod(event.target.value || '');
 
         // Atualiza o localStorage apenas se o método selecionado for diferente do armazenado
         const storedMethod = localStorage.getItem('mostUsedPaymentMethod');
@@ -414,6 +418,82 @@ const Home = () => {
         setBarcodeInput('');
     };
 
+    // Função para iniciar o scanner
+    const startScanner = useCallback(() => {
+        if (scannerRef.current) {
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: scannerRef.current,
+                    constraints: {
+                        facingMode: "environment",
+                        width: { min: 640 },
+                        height: { min: 480 },
+                        aspectRatio: { min: 1, max: 2 }
+                    },
+                },
+                locator: {
+                    patchSize: "medium",
+                    halfSample: true
+                },
+                numOfWorkers: navigator.hardwareConcurrency || 4,
+                decoder: {
+                    readers: [
+                        "ean_reader",
+                        "ean_8_reader",
+                        "code_128_reader",
+                        "code_39_reader",
+                        "upc_reader"
+                    ]
+                },
+                locate: true
+            }, (err) => {
+                if (err) {
+                    console.error("Erro ao iniciar Quagga:", err);
+                    return;
+                }
+                Quagga.start();
+                setIsScannerActive(true);
+            });
+
+            Quagga.onDetected((result) => {
+                if (result.codeResult.code) {
+                    const barcode = result.codeResult.code;
+                    setBarcodeInput(barcode);
+                    const produto = produtos.find(p => p.barcode === barcode);
+                    if (produto) {
+                        setProdutoSelecionado(produto);
+                        setQuantidade('1');
+                        adicionarAoCarrinho();
+                        stopScanner();
+                    } else {
+                        setSnackbar({
+                            open: true,
+                            message: 'Produto não encontrado',
+                            severity: 'error'
+                        });
+                    }
+                }
+            });
+        }
+    }, [produtos, adicionarAoCarrinho]);
+
+    // Função para parar o scanner
+    const stopScanner = useCallback(() => {
+        Quagga.stop();
+        setIsScannerActive(false);
+    }, []);
+
+    // Limpar o scanner quando o componente for desmontado
+    useEffect(() => {
+        return () => {
+            if (isScannerActive) {
+                stopScanner();
+            }
+        };
+    }, [isScannerActive, stopScanner]);
+
     return (
         <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100vh' }}>
             {/* Painel de Entrada de Produtos */}
@@ -431,20 +511,59 @@ const Home = () => {
 
                 {/* Leitor de Código de Barras */}
                 <form onSubmit={handleBarcodeSubmit}>
-                    <TextField
-                        fullWidth
-                        label="Código de Barras"
-                        value={barcodeInput}
-                        onChange={handleBarcodeInputChange}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <BarcodeIcon />
-                                </InputAdornment>
-                            ),
-                        }}
-                        sx={{ mb: 2 }}
-                    />
+                    <Box sx={{ mb: 2 }}>
+                        <TextField
+                            fullWidth
+                            label="Código de Barras"
+                            value={barcodeInput}
+                            onChange={handleBarcodeInputChange}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <IconButton onClick={() => isScannerActive ? stopScanner() : startScanner()}>
+                                            <BarcodeIcon color={isScannerActive ? "primary" : "inherit"} />
+                                        </IconButton>
+                                    </InputAdornment>
+                                ),
+                            }}
+                        />
+                        
+                        {/* Área do Scanner */}
+                        {isScannerActive && (
+                            <Box 
+                                sx={{ 
+                                    position: 'relative',
+                                    width: '100%',
+                                    height: '300px',
+                                    mt: 2,
+                                    overflow: 'hidden'
+                                }}
+                            >
+                                <div 
+                                    ref={scannerRef}
+                                    style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: '100%',
+                                        height: '100%'
+                                    }}
+                                />
+                                <Box
+                                    sx={{
+                                        position: 'absolute',
+                                        top: '50%',
+                                        left: '50%',
+                                        transform: 'translate(-50%, -50%)',
+                                        width: '80%',
+                                        height: '2px',
+                                        bgcolor: 'error.main',
+                                        boxShadow: '0 0 8px rgba(255,0,0,0.5)'
+                                    }}
+                                />
+                            </Box>
+                        )}
+                    </Box>
                 </form>
 
                 {/* Seleção de Produto e Quantidade */}
@@ -519,11 +638,11 @@ const Home = () => {
 
             {/* Painel do Carrinho e Finalização */}
             <Box sx={{ 
-                width: isMobile ? '100%' : '50%',  // Ajuste a largura para caber no painel
+                width: isMobile ? '100%' : '70%',  // Ajuste a largura para caber no painel
                 p: 2, 
                 display: 'flex', 
                 flexDirection: 'column',
-                height: isMobile ? 'auto' : '90vh' // Ajuste a altura para caber no painel
+                height: isMobile ? '100%' : '90%' // Ajuste a altura para caber no painel
             }}>
                 <Typography variant="h6" gutterBottom>Carrinho de Compras</Typography>
                 <List sx={{ flexGrow: 1, overflowY: 'auto', maxHeight: isMobile ? '40vh' : '60vh' }}>
@@ -559,7 +678,7 @@ const Home = () => {
                         <InputLabel id="payment-method-label">Método de Pagamento</InputLabel>
                         <Select
                             labelId="payment-method-label"
-                            value={paymentMethod}
+                            value={paymentMethod || ''} // Garante que seja string
                             onChange={handlePaymentMethodChange}
                             label="Método de Pagamento"
                         >

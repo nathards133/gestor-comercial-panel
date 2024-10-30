@@ -26,7 +26,9 @@ import {
     Skeleton,
     Container,
     IconButton,
-    Snackbar
+    Snackbar,
+    LinearProgress,
+    Tooltip
 } from '@mui/material';
 import WarningMessage from './WarningMessage';
 import PaymentNotificationList from './PaymentNotificationList';
@@ -36,6 +38,104 @@ import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
+const FinancialHealthIndicator = ({ totalSalesValue = 0, totalExpenses = 0 }) => {
+    const calculateFinancialHealth = () => {
+        if (!totalSalesValue || totalSalesValue === 0) return 0;
+        
+        const profit = totalSalesValue - totalExpenses;
+        const profitMargin = (profit / totalSalesValue) * 100;
+        
+        // Garante que o valor esteja entre 0 e 100
+        return Math.min(Math.max(profitMargin, 0), 100);
+    };
+
+    const healthPercentage = calculateFinancialHealth();
+    
+    const getColorByPercentage = (percentage) => {
+        if (percentage < 30) return '#f44336'; // Vermelho
+        if (percentage < 60) return '#ff9800'; // Laranja
+        return '#4caf50'; // Verde
+    };
+
+    const getStatusText = (percentage) => {
+        if (percentage < 30) return 'Situação Crítica';
+        if (percentage < 60) return 'Situação Estável';
+        return 'Situação Excelente';
+    };
+
+    return (
+        <Card sx={{ bgcolor: '#fafafa', mb: 3 }}>
+            <CardContent>
+                <Typography variant="h6" gutterBottom>
+                    Saúde Financeira
+                </Typography>
+                
+                <Tooltip
+                    title={
+                        <Box sx={{ p: 1 }}>
+                            <Typography variant="body2">
+                                Lucro Líquido: R$ {(totalSalesValue - totalExpenses).toFixed(2)}
+                            </Typography>
+                            <Typography variant="body2">
+                                Margem de Lucro: {healthPercentage.toFixed(1)}%
+                            </Typography>
+                        </Box>
+                    }
+                >
+                    <Box sx={{ width: '100%', mb: 2 }}>
+                        <LinearProgress
+                            variant="determinate"
+                            value={healthPercentage}
+                            sx={{
+                                height: 20,
+                                borderRadius: 5,
+                                backgroundColor: '#e0e0e0',
+                                '& .MuiLinearProgress-bar': {
+                                    backgroundColor: getColorByPercentage(healthPercentage),
+                                    borderRadius: 5,
+                                    transition: 'transform 0.8s ease-in-out'
+                                }
+                            }}
+                        />
+                    </Box>
+                </Tooltip>
+
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body1" color="text.secondary">
+                        {getStatusText(healthPercentage)}
+                    </Typography>
+                    <Typography 
+                        variant="h6" 
+                        color={getColorByPercentage(healthPercentage)}
+                        sx={{ fontWeight: 'bold' }}
+                    >
+                        {healthPercentage.toFixed(1)}%
+                    </Typography>
+                </Box>
+
+                <Grid container spacing={2} sx={{ mt: 2 }}>
+                    <Grid item xs={6}>
+                        <Typography variant="body2" color="text.secondary">
+                            Vendas Totais
+                        </Typography>
+                        <Typography variant="h6">
+                            R$ {totalSalesValue.toFixed(2)}
+                        </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                        <Typography variant="body2" color="text.secondary">
+                            Despesas Totais
+                        </Typography>
+                        <Typography variant="h6">
+                            R$ {totalExpenses.toFixed(2)}
+                        </Typography>
+                    </Grid>
+                </Grid>
+            </CardContent>
+        </Card>
+    );
+};
 
 const SalesPage = () => {
     const [sales, setSales] = useState([]);
@@ -507,139 +607,79 @@ const SalesPage = () => {
                                 </Grid>
                             </Grid>
 
-                            {/* Novos cards de resumo financeiro */}
-                            <Grid container spacing={2} sx={{ mb: 3 }}>
-                                <Grid item xs={12} sm={4}>
-                                    <Card sx={{ bgcolor: '#e8f5e9', height: '100%' }}>
-                                        <CardContent>
-                                            <Typography variant={isMobile ? "subtitle1" : "h6"}>
-                                                Vendas Brutas (Mês Atual)
-                                            </Typography>
-                                            <Typography variant={isMobile ? "h5" : "h4"}>
-                                                R$ {totalSalesValue.toFixed(2)}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                {totalSalesCount} transações
-                                            </Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                                <Grid item xs={12} sm={4}>
-                                    <Card sx={{ bgcolor: '#ffebee', height: '100%' }}>
-                                        <CardContent>
-                                            <Typography variant={isMobile ? "subtitle1" : "h6"}>
-                                                Contas a Pagar
-                                            </Typography>
-                                            <Typography variant={isMobile ? "h5" : "h4"}>
-                                                R$ {accountsStats.totalExpenses.toFixed(2)}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Pendente: R$ {accountsStats.totalPendingExpenses.toFixed(2)}
-                                            </Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                                <Grid item xs={12} sm={4}>
-                                    <Card sx={{ 
-                                        bgcolor: calculateNetProfit.totalNetProfit >= 0 ? '#e3f2fd' : '#ffebee',
-                                        height: '100%' 
-                                    }}>
-                                        <CardContent>
-                                            <Typography variant={isMobile ? "subtitle1" : "h6"}>
-                                                Lucro Líquido
-                                            </Typography>
-                                            <Typography 
-                                                variant={isMobile ? "h5" : "h4"}
-                                                color={calculateNetProfit.totalNetProfit >= 0 ? 'success.main' : 'error.main'}
-                                            >
-                                                R$ {calculateNetProfit.totalNetProfit.toFixed(2)}
-                                            </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Margem: {calculateNetProfit.totalProfitMargin.toFixed(1)}%
-                                            </Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                            </Grid>
+                            {tabValue !== 2 && (
+                                <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
+                                    Para visualizar o resumo financeiro completo, selecione a aba "Mês".
+                                </Alert>
+                            )}
 
-                            {/* Adicione um novo card para detalhes de pagamento */}
-                            <Grid container spacing={2} sx={{ mb: 3 }}>
-                                <Grid item xs={12}>
-                                    <Card sx={{ bgcolor: '#fafafa' }}>
-                                        <CardContent>
-                                            <Typography variant="h6" gutterBottom>
-                                                Status das Contas
-                                            </Typography>
-                                            <Grid container spacing={2}>
-                                                <Grid item xs={6} sm={3}>
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        Total a Pagar
+                            {tabValue === 2 && (
+                                <>
+                                    <Grid container spacing={2} sx={{ mb: 3 }}>
+                                        <Grid item xs={12} sm={4}>
+                                            <Card sx={{ bgcolor: '#e8f5e9', height: '100%' }}>
+                                                <CardContent>
+                                                    <Typography variant={isMobile ? "subtitle1" : "h6"}>
+                                                        Vendas Brutas (Mês Atual)
                                                     </Typography>
-                                                    <Typography variant="h6">
+                                                    <Typography variant={isMobile ? "h5" : "h4"}>
+                                                        R$ {totalSalesValue.toFixed(2)}
+                                                    </Typography>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        {totalSalesCount} transações
+                                                    </Typography>
+                                                </CardContent>
+                                            </Card>
+                                        </Grid>
+                                        <Grid item xs={12} sm={4}>
+                                            <Card sx={{ bgcolor: '#ffebee', height: '100%' }}>
+                                                <CardContent>
+                                                    <Typography variant={isMobile ? "subtitle1" : "h6"}>
+                                                        Contas a Pagar
+                                                    </Typography>
+                                                    <Typography variant={isMobile ? "h5" : "h4"}>
                                                         R$ {accountsStats.totalExpenses.toFixed(2)}
                                                     </Typography>
-                                                </Grid>
-                                                <Grid item xs={6} sm={3}>
                                                     <Typography variant="body2" color="text.secondary">
-                                                        Pendente
+                                                        Pendente: R$ {accountsStats.totalPendingExpenses.toFixed(2)}
                                                     </Typography>
-                                                    <Typography variant="h6">
-                                                        R$ {accountsStats.totalPendingExpenses.toFixed(2)}
+                                                </CardContent>
+                                            </Card>
+                                        </Grid>
+                                        <Grid item xs={12} sm={4}>
+                                            <Card sx={{ 
+                                                bgcolor: calculateNetProfit.totalNetProfit >= 0 ? '#e3f2fd' : '#ffebee',
+                                                height: '100%' 
+                                            }}>
+                                                <CardContent>
+                                                    <Typography variant={isMobile ? "subtitle1" : "h6"}>
+                                                        Lucro Líquido
                                                     </Typography>
-                                                </Grid>
-                                                <Grid item xs={6} sm={3}>
+                                                    <Typography 
+                                                        variant={isMobile ? "h5" : "h4"}
+                                                        color={calculateNetProfit.totalNetProfit >= 0 ? 'success.main' : 'error.main'}
+                                                    >
+                                                        R$ {calculateNetProfit.totalNetProfit.toFixed(2)}
+                                                    </Typography>
                                                     <Typography variant="body2" color="text.secondary">
-                                                        Pago
+                                                        Margem: {calculateNetProfit.totalProfitMargin.toFixed(1)}%
                                                     </Typography>
-                                                    <Typography variant="h6">
-                                                        R$ {accountsStats.totalPaidExpenses.toFixed(2)}
-                                                    </Typography>
-                                                </Grid>
-                                                <Grid item xs={6} sm={3}>
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        Contas Pendentes
-                                                    </Typography>
-                                                    <Typography variant="h6">
-                                                        {accountsStats.totalPendingExpensesCount}
-                                                    </Typography>
-                                                </Grid>
-                                            </Grid>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                            </Grid>
+                                                </CardContent>
+                                            </Card>
+                                        </Grid>
+                                    </Grid>
 
-                            {/* Adicionar um card extra para detalhes de pagamento */}
-                            <Grid container spacing={2} sx={{ mb: 3 }}>
-                                <Grid item xs={12}>
-                                    <Card sx={{ bgcolor: '#fafafa' }}>
-                                        <CardContent>
-                                            <Typography variant="h6" gutterBottom>
-                                                Vendas por Método de Pagamento
-                                            </Typography>
-                                            <Grid container spacing={2}>
-                                                {Object.entries(totalSalesByPaymentMethod).map(([method, value]) => (
-                                                    <Grid item xs={6} sm={3} key={method}>
-                                                        <Typography variant="body2" color="text.secondary">
-                                                            {method}
-                                                        </Typography>
-                                                        <Typography variant="h6">
-                                                            R$ {value.toFixed(2)}
-                                                        </Typography>
-                                                    </Grid>
-                                                ))}
-                                                {Object.keys(totalSalesByPaymentMethod).length === 0 && (
-                                                    <Grid item xs={12}>
-                                                        <Typography variant="body2" color="text.secondary" align="center">
-                                                            Nenhuma venda registrada no período
-                                                        </Typography>
-                                                    </Grid>
-                                                )}
-                                            </Grid>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                            </Grid>
+                                    {/* ProgressBar de saúde financeira */}
+                                    <Grid container spacing={2} sx={{ mb: 3 }}>
+                                        <Grid item xs={12}>
+                                            <FinancialHealthIndicator 
+                                                totalSalesValue={Number(totalSalesValue) || 0}
+                                                totalExpenses={Number(accountsStats.totalExpenses) || 0}
+                                            />
+                                        </Grid>
+                                    </Grid>
+                                </>
+                            )}
 
                             <Tabs value={tabValue} onChange={handleTabChange} centered>
                                 <Tab label="Dia" />
