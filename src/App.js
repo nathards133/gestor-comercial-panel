@@ -16,6 +16,8 @@ import Integrations from './components/Integrations';
 import AccountsPayable from './components/AccountsPayable';
 import GenerateRegisterLink from './components/GenerateRegisterLink';
 import Register from './components/Register';
+import UserList from './pages/UserList';
+import CertificateUpload from './pages/CertificateUpload';
 const lightTheme = createTheme({
   palette: {
     mode: 'light',
@@ -98,6 +100,8 @@ function App() {
                   <GenerateRegisterLink />
                 </ProtectedRoute>
               } />
+              <Route path="users" element={<UserList />} />
+              <Route path="certificate" element={<CertificateUpload />} />
             </Route>
           </Routes>
         </Router>

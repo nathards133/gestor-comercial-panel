@@ -35,12 +35,15 @@ import {
   ExitToApp,
   AttachMoney,
   RequestPage,
-  PersonAdd
+  PersonAdd,
+  CardMembership,
 } from '@mui/icons-material';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import PaymentNotificationList from './PaymentNotificationList';
+import PeopleIcon from '@mui/icons-material/People';
+import { Bubble } from "@typebot.io/react";
 
 const menuItems = [
   { text: 'Caixa', icon: <PointOfSale />, path: '/' },
@@ -49,7 +52,40 @@ const menuItems = [
   { text: 'Relatórios', icon: <Assessment />, path: '/reports' },
   { text: 'Fornecedores', icon: <Store />, path: '/suppliers' },
   { text: 'Contas a Pagar', icon: <RequestPage />, path: '/accounts-payable' },
+  { text: 'Certificado', icon: <CardMembership />, path: '/certificate' },
 ];
+
+const UserMenu = ({ user, open }) => {
+  return (
+    <>
+      {user?.role === 'admin' && (
+        <ListItemButton
+          component={Link}
+          to="/users"
+          sx={{
+            minHeight: 48,
+            justifyContent: open ? 'initial' : 'center',
+            px: 2.5,
+          }}
+        >
+          <ListItemIcon
+            sx={{
+              minWidth: 0,
+              mr: open ? 3 : 'auto',
+              justifyContent: 'center',
+            }}
+          >
+            <PeopleIcon />
+          </ListItemIcon>
+          <ListItemText 
+            primary="Listar Usuários" 
+            sx={{ opacity: open ? 1 : 0 }}
+          />
+        </ListItemButton>
+      )}
+    </>
+  );
+};
 
 const Layout = ({ toggleTheme, isDarkMode }) => {
   const { logout, user } = useAuth();
@@ -61,6 +97,7 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
   const [notificationCount, setNotificationCount] = useState(0);
   const [notificationAnchorEl, setNotificationAnchorEl] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
+  const location = useLocation();
 
   useEffect(() => {
     setOpen(!isMobile);
@@ -95,6 +132,11 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
   };
 
   const drawerWidth = isMobile ? 60 : (open ? 240 : 60);
+
+  const shouldShowBot = () => {
+    const allowedPaths = ['/sales', '/products', '/suppliers'];
+    return allowedPaths.some(path => location.pathname.startsWith(path));
+  };
 
   return (
     <Box sx={{ display: 'flex' }}>
@@ -286,6 +328,7 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
                 </ListItemButton>
               </>
             )}
+            <UserMenu user={user} open={open} />
           </List>
           {!isMobile && (
             <Box>
@@ -301,6 +344,23 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
         <Toolbar />
         <Outlet />
       </Box>
+      {shouldShowBot() && (
+        <Bubble
+          typebot="my-typebot-qx2vjg5"
+          theme={{ 
+            button: { 
+              backgroundColor: "#0042DA",
+                customIconSrc:
+                "https://s3.typebot.io/public/workspaces/cm2uwzh4x00014dehrjv0t5s0/typebots/cm2xnsi8s000cd3vaqqx2vjg5/bubble-icon?v=1730407436251",
+              position: "fixed",
+              bottom: "20px",
+              right: "20px",
+              zIndex: 9999,
+              boxShadow: "0px 0px 10px 0px rgba(0, 0, 0, 0.1)"
+            }
+          }}
+        />
+      )}
     </Box>
   );
 };
