@@ -18,6 +18,8 @@ import GenerateRegisterLink from './components/GenerateRegisterLink';
 import Register from './components/Register';
 import UserList from './pages/UserList';
 import CertificateUpload from './pages/CertificateUpload';
+import { ConfigProvider } from './contexts/ConfigContext';
+import ConfigPanel from './components/ConfigPanel';
 const lightTheme = createTheme({
   palette: {
     mode: 'light',
@@ -74,39 +76,42 @@ function App() {
   };
 
   return (
-    <ThemeProvider theme={isDarkMode ? darkTheme : lightTheme}>
-      <CssBaseline />
-      <AuthProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Layout toggleTheme={toggleTheme} isDarkMode={isDarkMode} />
-              </ProtectedRoute>
-            }>
-              <Route index element={<Home />} />
-              <Route path="products" element={<ProductList />} />
-              <Route path="settings" element={<Settings />} />
-              <Route path="sales" element={<SalesPage />} />
-              <Route path="stock" element={<StockManagement />} />
-              <Route path="suppliers" element={<SupplierManagement />} />
-              <Route path="reports" element={<ReportsPage />} />
-              <Route path="integrations" element={<Integrations />} />
-              <Route path="accounts-payable" element={<AccountsPayable />} />
-              <Route path="admin/generate-register-link" element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <GenerateRegisterLink />
+    <ConfigProvider>
+      <ThemeProvider theme={isDarkMode ? darkTheme : lightTheme}>
+        <CssBaseline />
+        <AuthProvider>
+          <Router>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <Layout toggleTheme={toggleTheme} isDarkMode={isDarkMode} />
                 </ProtectedRoute>
-              } />
-              <Route path="users" element={<UserList />} />
-              <Route path="certificate" element={<CertificateUpload />} />
-            </Route>
-          </Routes>
-        </Router>
-      </AuthProvider>
-    </ThemeProvider>
+              }>
+                <Route index element={<Home />} />
+                <Route path="products" element={<ProductList />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="sales" element={<SalesPage />} />
+                <Route path="stock" element={<StockManagement />} />
+                <Route path="suppliers" element={<SupplierManagement />} />
+                <Route path="reports" element={<ReportsPage />} />
+                <Route path="config" element={<ConfigPanel />} />
+                <Route path="integrations" element={<Integrations />} />
+                <Route path="accounts-payable" element={<AccountsPayable />} />
+                <Route path="admin/generate-register-link" element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <GenerateRegisterLink />
+                  </ProtectedRoute>
+                } />
+                <Route path="users" element={<UserList />} />
+                <Route path="certificate" element={<CertificateUpload />} />
+              </Route>
+            </Routes>
+          </Router>
+        </AuthProvider>
+      </ThemeProvider>
+    </ConfigProvider>
   );
 }
 

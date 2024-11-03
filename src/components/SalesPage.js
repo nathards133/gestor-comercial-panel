@@ -36,6 +36,7 @@ import PasswordModal from './PasswordModal';
 import { useNavigate } from 'react-router-dom';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
+import { Receipt as ReceiptIcon } from '@mui/icons-material';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -709,6 +710,7 @@ const SalesPage = () => {
                                                     <TableCell>Produtos</TableCell>
                                                     <TableCell align="right">Valor Total</TableCell>
                                                     <TableCell>Método de Pagamento</TableCell>
+                                                    <TableCell>Nota Fiscal</TableCell>
                                                 </TableRow>
                                             </TableHead>
                                             <TableBody>
@@ -718,6 +720,19 @@ const SalesPage = () => {
                                                         <TableCell>{renderSaleItems(sale)}</TableCell>
                                                         <TableCell align="right">R$ {sale.totalValue?.toFixed(2) || '0.00'}</TableCell>
                                                         <TableCell>{sale.paymentMethod || 'Não especificado'}</TableCell>
+                                                        <TableCell>
+                                                            {sale.nfeUrl ? (
+                                                                <Button
+                                                                    startIcon={<ReceiptIcon />}
+                                                                    size="small"
+                                                                    onClick={() => window.open(sale.nfeUrl, '_blank')}
+                                                                >
+                                                                    Ver NFe
+                                                                </Button>
+                                                            ) : (
+                                                                'N/A'
+                                                            )}
+                                                        </TableCell>
                                                     </TableRow>
                                                 ))}
                                             </TableBody>

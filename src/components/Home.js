@@ -24,6 +24,10 @@ import { formatarQuantidade } from '../utils/formatters';
 import { useNavigate } from 'react-router-dom';
 import NotificationIcon from './NotificationIcon';
 import Quagga from 'quagga';
+import PaymentProcessor from './PaymentProcessor';
+import { useConfig } from '../contexts/ConfigContext';
+import SettingsIcon from '@mui/icons-material/Settings';
+import ConfigPanel from './ConfigPanel';
 
 const Home = () => {
     const [produtos, setProdutos] = useState([]);
@@ -68,6 +72,12 @@ const Home = () => {
 
     const [isScannerActive, setIsScannerActive] = useState(false);
     const scannerRef = useRef(null);
+
+    const [showPaymentProcessor, setShowPaymentProcessor] = useState(false);
+    const [currentSaleData, setCurrentSaleData] = useState(null);
+
+    const [configOpen, setConfigOpen] = useState(false);
+    const { nfeEnabled } = useConfig();
 
     const updateTopSellingProducts = useCallback(async () => {
     try {
@@ -205,6 +215,46 @@ const Home = () => {
         });
     }, []);
 
+    const adicionarProdutoAoCarrinho = useCallback((produto, quantidadeNumerica) => {
+        if (!produto) return;
+        
+        // Verifica se o produto já existe no carrinho
+        const produtoExistenteIndex = carrinho.findIndex(item => item._id === produto._id);
+        
+        setCarrinho(prevCarrinho => {
+            if (produtoExistenteIndex !== -1) {
+                // Atualiza quantidade do produto existente
+                const novoCarrinho = [...prevCarrinho];
+                const novaQuantidade = novoCarrinho[produtoExistenteIndex].quantidade + quantidadeNumerica;
+                
+                if (novaQuantidade > produto.quantity) {
+                    setSnackbar({
+                        open: true,
+                        message: `Atenção: Estoque insuficiente. Disponível: ${produto.quantity} ${produto.unit}`,
+                        severity: 'warning'
+                    });
+                    novoCarrinho[produtoExistenteIndex].quantidade = produto.quantity;
+                } else {
+                    novoCarrinho[produtoExistenteIndex].quantidade = novaQuantidade;
+                }
+                
+                return novoCarrinho;
+            } else {
+                // Adiciona novo produto
+                if (quantidadeNumerica > produto.quantity) {
+                    setSnackbar({
+                        open: true,
+                        message: `Atenção: Estoque insuficiente. Disponível: ${produto.quantity} ${produto.unit}`,
+                        severity: 'warning'
+                    });
+                    quantidadeNumerica = produto.quantity;
+                }
+                
+                return [...prevCarrinho, { ...produto, quantidade: quantidadeNumerica }];
+            }
+        });
+    }, [carrinho]);
+
     const adicionarAoCarrinho = useCallback(() => {
         if (produtoSelecionado) {
             let quantidadeNumerica = produtoSelecionado.unit === 'kg' 
@@ -220,21 +270,7 @@ const Home = () => {
                 return;
             }
             
-            // Verifica se a quantidade desejada está disponível no estoque
-            if (quantidadeNumerica > produtoSelecionado.quantity) {
-                setSnackbar({
-                    open: true,
-                    message: `Atenção: Estoque insuficiente. Disponível: ${produtoSelecionado.quantity} ${produtoSelecionado.unit}`,
-                    severity: 'warning'
-                });
-                // Permite que a venda continue, mas com a quantidade disponível
-                quantidadeNumerica = produtoSelecionado.quantity;
-            }
-            
-            setCarrinho(prevCarrinho => [...prevCarrinho, { 
-                ...produtoSelecionado, 
-                quantidade: quantidadeNumerica 
-            }]);
+            adicionarProdutoAoCarrinho(produtoSelecionado, quantidadeNumerica);
             setProdutoSelecionado(null);
             setQuantidade('');
             setInputValue('');
@@ -242,7 +278,7 @@ const Home = () => {
                 produtoInputRef.current.focus();
             }
         }
-    }, [produtoSelecionado, quantidade, setSnackbar]);
+    }, [produtoSelecionado, quantidade, adicionarProdutoAoCarrinho]);
 
     const handleKeyDown = useCallback((e) => {
         if (e.key === 'Enter') {
@@ -267,25 +303,53 @@ const Home = () => {
     
 
     const finalizarVenda = useCallback(async () => {
+        const saleTotal = carrinho.reduce((acc, item) => acc + item.price * item.quantidade, 0);
+        
         setIsFinalizingVenda(true);
         try {
-            await axios.post(`${apiUrl}/api/sales`, {
+            // Criar venda
+            const saleResponse = await axios.post(`${apiUrl}/api/sales`, {
                 items: carrinho,
                 paymentMethod: paymentMethod
             });
+
+            // Gerar nota fiscal apenas se estiver habilitado
+            let nfeResponse = null;
+            if (nfeEnabled) {
+                try {
+                    nfeResponse = await axios.post(`${apiUrl}/api/nfe`, {
+                        saleId: saleResponse.data._id
+                    });
+                } catch (nfeError) {
+                    console.error('Erro ao gerar nota fiscal:', nfeError);
+                    // Continua o processo mesmo se a nota falhar
+                }
+            }
+
             setCarrinho([]);
             setPaymentMethod('');
-            setActiveStep(0); // Redireciona para o passo 0
+            setActiveStep(0);
+            
+            // Mostrar mensagem apropriada
             setSnackbar({
                 open: true,
-                message: 'Venda finalizada com sucesso!',
-                severity: 'success'
+                message: nfeEnabled 
+                    ? (nfeResponse?.data.success 
+                        ? 'Venda finalizada com sucesso! Nota fiscal gerada.'
+                        : 'Venda finalizada com sucesso! Erro ao gerar nota fiscal.')
+                    : 'Venda finalizada com sucesso!',
+                severity: 'success',
+                action: nfeResponse?.data.success ? (
+                    <Button color="inherit" size="small" onClick={() => window.open(nfeResponse.data.nfeUrl, '_blank')}>
+                        Ver NF-e
+                    </Button>
+                ) : undefined
             });
-            updateTopSellingProducts(); // Atualiza os produtos mais vendidos
+
+            updateTopSellingProducts();
             if (produtoInputRef.current) {
                 produtoInputRef.current.focus();
             }
-            const saleTotal = carrinho.reduce((acc, item) => acc + item.price * item.quantidade, 0);
             addNotification({ total: saleTotal, paymentMethod });
         } catch (error) {
             console.error('Erro ao finalizar venda:', error);
@@ -297,7 +361,7 @@ const Home = () => {
         } finally {
             setIsFinalizingVenda(false);
         }
-    }, [carrinho, paymentMethod, apiUrl, updateTopSellingProducts, addNotification]);
+    }, [carrinho, paymentMethod, apiUrl, updateTopSellingProducts, addNotification, nfeEnabled]);
 
     const handleAutocompleteChange = useCallback((event, newValue) => {
         setProdutoSelecionado(newValue);
@@ -405,9 +469,12 @@ const Home = () => {
         event.preventDefault();
         const produto = produtos.find(p => p.barcode === barcodeInput);
         if (produto) {
-            setProdutoSelecionado(produto);
-            setQuantidade('1');
-            adicionarAoCarrinho();
+            adicionarProdutoAoCarrinho(produto, 1);
+            setSnackbar({
+                open: true,
+                message: `${produto.name} adicionado ao carrinho`,
+                severity: 'success'
+            });
         } else {
             setSnackbar({
                 open: true,
@@ -463,10 +530,13 @@ const Home = () => {
                     setBarcodeInput(barcode);
                     const produto = produtos.find(p => p.barcode === barcode);
                     if (produto) {
-                        setProdutoSelecionado(produto);
-                        setQuantidade('1');
-                        adicionarAoCarrinho();
+                        adicionarProdutoAoCarrinho(produto, 1);
                         stopScanner();
+                        setSnackbar({
+                            open: true,
+                            message: `${produto.name} adicionado ao carrinho`,
+                            severity: 'success'
+                        });
                     } else {
                         setSnackbar({
                             open: true,
@@ -477,7 +547,7 @@ const Home = () => {
                 }
             });
         }
-    }, [produtos, adicionarAoCarrinho]);
+    }, [produtos, adicionarProdutoAoCarrinho]);
 
     // Função para parar o scanner
     const stopScanner = useCallback(() => {
@@ -493,6 +563,37 @@ const Home = () => {
             }
         };
     }, [isScannerActive, stopScanner]);
+
+    const handlePaymentSuccess = async () => {
+        setShowPaymentProcessor(false);
+        setCarrinho([]);
+        setPaymentMethod('');
+        setActiveStep(0);
+        setSnackbar({
+            open: true,
+            message: 'Pagamento realizado com sucesso!',
+            severity: 'success'
+        });
+        updateTopSellingProducts();
+        if (produtoInputRef.current) {
+            produtoInputRef.current.focus();
+        }
+        if (currentSaleData) {
+            addNotification({ 
+                total: currentSaleData.total, 
+                paymentMethod: currentSaleData.paymentMethod 
+            });
+        }
+    };
+
+    const handlePaymentError = (error) => {
+        console.error('Erro no pagamento:', error);
+        setSnackbar({
+            open: true,
+            message: 'Erro ao processar pagamento. Tente novamente.',
+            severity: 'error'
+        });
+    };
 
     return (
         <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100vh' }}>
@@ -716,6 +817,16 @@ const Home = () => {
                 </Box>
             </Box>
 
+            {/* PaymentProcessor */}
+            <PaymentProcessor
+                open={showPaymentProcessor}
+                onClose={() => setShowPaymentProcessor(false)}
+                saleTotal={currentSaleData?.total || 0}
+                saleId={currentSaleData?.id}
+                onSuccess={handlePaymentSuccess}
+                onError={handlePaymentError}
+            />
+
             {/* Snackbar para mensagens */}
             <Snackbar
                 open={snackbar.open}
@@ -727,6 +838,20 @@ const Home = () => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
+
+            {/* Adicione o botão de configurações */}
+            <IconButton
+                onClick={() => setConfigOpen(true)}
+                sx={{ position: 'absolute', top: 16, right: 16 }}
+            >
+                <SettingsIcon />
+            </IconButton>
+
+            {/* Adicione o painel de configurações */}
+            <ConfigPanel
+                open={configOpen}
+                onClose={() => setConfigOpen(false)}
+            />
         </Box>
     );
 };

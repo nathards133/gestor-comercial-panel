@@ -44,6 +44,9 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import PaymentNotificationList from './PaymentNotificationList';
 import PeopleIcon from '@mui/icons-material/People';
 import { Bubble } from "@typebot.io/react";
+import { Settings as SettingsIcon } from '@mui/icons-material';
+import { useConfig } from '../contexts/ConfigContext';
+import ConfigPanel from './ConfigPanel';
 
 const menuItems = [
   { text: 'Caixa', icon: <PointOfSale />, path: '/' },
@@ -52,7 +55,8 @@ const menuItems = [
   { text: 'Relatórios', icon: <Assessment />, path: '/reports' },
   { text: 'Fornecedores', icon: <Store />, path: '/suppliers' },
   { text: 'Contas a Pagar', icon: <RequestPage />, path: '/accounts-payable' },
-  { text: 'Certificado', icon: <CardMembership />, path: '/certificate' },
+  { text: 'Certificado Digital', icon: <CardMembership />, path: '/certificate' },
+//   { text: 'Configurações', icon: <Settings />, path: '/config' },
 ];
 
 const UserMenu = ({ user, open }) => {
@@ -98,6 +102,8 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
   const [notificationAnchorEl, setNotificationAnchorEl] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const location = useLocation();
+  const [configOpen, setConfigOpen] = useState(false);
+  const { nfeEnabled } = useConfig();
 
   useEffect(() => {
     setOpen(!isMobile);
@@ -155,6 +161,13 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Bem vindo, {user?.company}
           </Typography>
+          <IconButton 
+            color="inherit" 
+            onClick={() => setConfigOpen(true)}
+            sx={{ ml: 1 }}
+          >
+            <SettingsIcon />
+          </IconButton>
           <IconButton color="inherit" onClick={toggleTheme}>
             {isDarkMode ? <Brightness7Icon /> : <Brightness4Icon />}
           </IconButton>
@@ -355,12 +368,15 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
               position: "fixed",
               bottom: "20px",
               right: "20px",
-              zIndex: 9999,
-              boxShadow: "0px 0px 10px 0px rgba(0, 0, 0, 0.1)"
+              zIndex: 9999
             }
           }}
         />
       )}
+      <ConfigPanel
+        open={configOpen}
+        onClose={() => setConfigOpen(false)}
+      />
     </Box>
   );
 };
