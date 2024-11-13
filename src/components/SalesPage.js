@@ -29,7 +29,8 @@ import {
     Snackbar,
     LinearProgress,
     Tooltip,
-    Divider
+    Divider,
+    CardHeader
 } from '@mui/material';
 import WarningMessage from './WarningMessage';
 import PaymentNotificationList from './PaymentNotificationList';
@@ -38,6 +39,7 @@ import { useNavigate } from 'react-router-dom';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { Receipt as ReceiptIcon } from '@mui/icons-material';
+import CashClosingModal from './CashClosingModal';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -188,7 +190,12 @@ const SalesPage = () => {
 
     const [totalSalesByPaymentMethod, setTotalSalesByPaymentMethod] = useState({});
 
+    const [cashRegisters, setCashRegisters] = useState([]);
     const [cashRegisterData, setCashRegisterData] = useState([]);
+    const [isCashRegisterOpen, setIsCashRegisterOpen] = useState(false);
+    const [showClosingModal, setShowClosingModal] = useState(false);
+    const [loadingClosing, setLoadingClosing] = useState(false);
+    const [cashClosingData, setCashClosingData] = useState(null);
 
     const calculateSalesByPaymentMethod = useCallback((salesData) => {
         const methodTotals = salesData.reduce((acc, sale) => {
@@ -397,7 +404,7 @@ const SalesPage = () => {
                 setIsPasswordModalOpen(false);
                 setIsContentVisible(true);
                 
-                // Iniciar as requisições após a validação da senha
+                // Iniciar as requisições após a validao da senha
                 try {
                     setLoading(true);
                     await Promise.all([
@@ -571,6 +578,11 @@ const SalesPage = () => {
             }
         };
 
+        console.log('Status do caixa:', {
+            isCashRegisterOpen,
+            cashRegisterData
+        });
+
         return (
             <Card sx={{ mb: 3 }}>
                 <CardContent>
@@ -597,7 +609,7 @@ const SalesPage = () => {
                                         bgcolor: register.status === 'open' ? '#e3f2fd' : '#fff'
                                     }}>
                                         <Typography variant="subtitle1" sx={{ fontWeight: 'medium', mb: 1 }}>
-                                            Caixa {index + 1} - {formatDate(register.openedAt)}
+                                            Caixa - {formatDate(register.openedAt)}
                                             {register.closedAt && ` até ${formatDate(register.closedAt)}`}
                                         </Typography>
                                         
@@ -655,36 +667,340 @@ const SalesPage = () => {
                             );
                         })}
                     </Grid>
+                    <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                        <Button
+                            variant="contained"
+                            color="secondary"
+                            onClick={fetchClosingData}
+                            disabled={!isCashRegisterOpen}
+                        >
+                            Fechar Caixa
+                        </Button>
+                    </Box>
                 </CardContent>
             </Card>
         );
     };
 
+    // Função para buscar dados do caixa
+    const fetchCashRegisterData = useCallback(async () => {
+        try {
+            const [statusResponse, dailyResponse] = await Promise.all([
+                axios.get(`${API_URL}/api/cash-register`),
+                axios.get(`${API_URL}/api/cash-register/daily`)
+            ]);
+            
+            // Atualiza o estado do caixa atual
+            if (statusResponse.data.data) {
+                const isOpen = statusResponse.data.data.status === 'open';
+                setIsCashRegisterOpen(isOpen);
+                setCashRegisterData([statusResponse.data.data]);
+            } else {
+                setIsCashRegisterOpen(false);
+                setCashRegisterData([]);
+            }
+
+            // Atualiza o histórico de caixas do dia
+            if (dailyResponse.data) {
+                setCashRegisters(dailyResponse.data);
+            }
+
+        } catch (error) {
+            console.error('Erro ao verificar status do caixa:', error);
+            setIsCashRegisterOpen(false);
+            setCashRegisterData([]);
+            setCashRegisters([]);
+            setSnackbar({
+                open: true,
+                message: 'Erro ao verificar status do caixa',
+                severity: 'error'
+            });
+        }
+    }, [API_URL]);
+
+    // Adicionar useEffect para buscar dados do caixa
     useEffect(() => {
-        const fetchSales = async () => {
+        if (isContentVisible) {
+            fetchCashRegisterData();
+        }
+    }, [fetchCashRegisterData, isContentVisible]);
+
+    // Atualiza o useEffect existente para incluir a verificação do caixa
+    useEffect(() => {
+        const fetchData = async () => {
             setLoading(true);
             try {
-                const response = await axios.get(`${API_URL}/api/sales`, {
-                    params: { period: tabValue }
-                });
+                const [salesResponse, cashResponse] = await Promise.all([
+                    axios.get(`${API_URL}/api/sales`, {
+                        params: { period: tabValue }
+                    }),
+                    axios.get(`${API_URL}/api/cash-register`)
+                ]);
                 
-                setSales(response.data.sales || []);
-                setPeriodInfo(response.data.periodInfo || null);
-                if (response.data.financialSummary?.cashRegisterData) {
-                    setCashRegisterData(response.data.financialSummary.cashRegisterData);
+                setSales(salesResponse.data.sales || []);
+                setPeriodInfo(salesResponse.data.periodInfo || null);
+                
+                if (salesResponse.data.financialSummary?.cashRegisterData) {
+                    setCashRegisterData(salesResponse.data.financialSummary.cashRegisterData);
                 }
                 
-                // ... resto do código existente ...
+                setIsCashRegisterOpen(cashResponse.data.status === 'open');
+                
             } catch (error) {
-                console.error('Erro ao buscar vendas:', error);
-                setError('Falha ao carregar as vendas');
+                console.error('Erro ao carregar dados:', error);
+                setError('Falha ao carregar os dados');
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchSales();
+        fetchData();
     }, [tabValue, API_URL]);
+
+    // Função para buscar dados do fechamento
+    const fetchClosingData = async () => {
+        try {
+            const response = await axios.get(`${API_URL}/api/cash-register/closing-data`);
+            if (response.data) {
+                // Processar os dados para o formato esperado pela modal
+                const cashData = {
+                    initialAmount: response.data.data.initialAmount,
+                    currentAmount: response.data.data.currentAmount,
+                    totalSales: response.data.data.transactions
+                        .filter(t => t.type === 'sale')
+                        .reduce((sum, t) => sum + t.amount, 0),
+                    totalWithdrawals: response.data.data.transactions
+                        .filter(t => t.type === 'withdrawal')
+                        .reduce((sum, t) => sum + t.amount, 0),
+                    expectedBalance: {
+                        cash: response.data.data.currentAmount, // ou ajuste conforme necessário
+                        credit: 0, // preencher com valores reais se disponíveis
+                        debit: 0,
+                        pix: 0
+                    }
+                };
+
+                setCashClosingData(cashData);
+                setShowClosingModal(true);
+            }
+        } catch (error) {
+            console.error('Erro ao buscar dados do fechamento:', error);
+            setSnackbar({
+                open: true,
+                message: 'Erro ao carregar dados do fechamento',
+                severity: 'error'
+            });
+        }
+    };
+
+    // Função para fechar o caixa
+    const handleCloseCashRegister = async (data) => {
+        setLoadingClosing(true);
+        try {
+            await axios.post(`${API_URL}/api/cash-register/close`, {
+                values: data.values,
+                observation: data.observation
+            });
+            
+            setShowClosingModal(false);
+            setIsCashRegisterOpen(false); // Atualiza o estado do caixa
+            setCashRegisterData([]); // Limpa os dados do caixa atual
+            
+            // Busca todos os caixas do dia
+            fetchDailyCashRegisters();
+            
+            setSnackbar({
+                open: true,
+                message: 'Caixa fechado com sucesso!',
+                severity: 'success'
+            });
+        } catch (error) {
+            console.error('Erro ao fechar caixa:', error);
+            setSnackbar({
+                open: true,
+                message: error.response?.data?.message || 'Erro ao fechar caixa',
+                severity: 'error'
+            });
+        } finally {
+            setLoadingClosing(false);
+        }
+    };
+
+    // Adicionar função para buscar todos os caixas do dia
+    const fetchDailyCashRegisters = async () => {
+        try {
+            const response = await axios.get(`${API_URL}/api/cash-register/daily`);
+            setCashRegisters(response.data);
+        } catch (error) {
+            console.error('Erro ao buscar caixas do dia:', error);
+        }
+    };
+
+    // Adicionar useEffect para buscar caixas ao montar o componente
+    useEffect(() => {
+        if (isContentVisible) {
+            fetchDailyCashRegisters();
+        }
+    }, [isContentVisible]);
+
+    // Atualizar o componente de renderização dos caixas
+    const renderCashRegisters = () => {
+        return (
+            <Box sx={{ mb: 3 }}>
+                {/* Caixa Atual */}
+                {isCashRegisterOpen && cashRegisterData.length > 0 && (
+                    <Card sx={{ mb: 2 }}>
+                        <CardHeader 
+                            title="Caixa Atual" 
+                            action={
+                                <Button
+                                    variant="contained"
+                                    color="secondary"
+                                    onClick={fetchClosingData}
+                                    disabled={!isCashRegisterOpen || cashRegisterData[0]?.status !== 'open'}
+                                >
+                                    Fechar Caixa
+                                </Button>
+                            }
+                        />
+                        <CardContent>
+                            <Grid container spacing={2}>
+                                <Grid item xs={12} md={4}>
+                                    <Typography variant="subtitle2" color="text.secondary">
+                                        Valor Inicial
+                                    </Typography>
+                                    <Typography variant="h6">
+                                        R$ {cashRegisterData[0]?.initialAmount?.toFixed(2)}
+                                    </Typography>
+                                </Grid>
+                                <Grid item xs={12} md={4}>
+                                    <Typography variant="subtitle2" color="text.secondary">
+                                        Saldo Atual
+                                    </Typography>
+                                    <Typography variant="h6">
+                                        R$ {cashRegisterData[0]?.currentAmount?.toFixed(2)}
+                                    </Typography>
+                                </Grid>
+                                <Grid item xs={12} md={4}>
+                                    <Typography variant="subtitle2" color="text.secondary">
+                                        Aberto em
+                                    </Typography>
+                                    <Typography variant="body1">
+                                        {new Date(cashRegisterData[0]?.openedAt).toLocaleString()}
+                                    </Typography>
+                                </Grid>
+                            </Grid>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Histórico de Caixas */}
+                <Card>
+                    <CardHeader 
+                        title="Histórico de Caixas do Dia"
+                        sx={{ borderBottom: 1, borderColor: 'divider' }}
+                    />
+                    <CardContent>
+                        {cashRegisters.length === 0 ? (
+                            <Alert severity="info">Nenhum caixa registrado hoje.</Alert>
+                        ) : (
+                            <Grid container spacing={2}>
+                                {cashRegisters.map((register) => (
+                                    <Grid item xs={12} key={register._id}>
+                                        <Paper 
+                                            elevation={0} 
+                                            sx={{ 
+                                                p: 2, 
+                                                border: 1, 
+                                                borderColor: 'divider',
+                                                bgcolor: register.status === 'open' ? 'action.hover' : 'background.paper'
+                                            }}
+                                        >
+                                            <Grid container spacing={2}>
+                                                <Grid item xs={12}>
+                                                    <Typography variant="subtitle1" gutterBottom>
+                                                        Período: {new Date(register.openedAt).toLocaleString()} - {
+                                                            register.closedAt ? 
+                                                            new Date(register.closedAt).toLocaleString() : 
+                                                            'Em andamento'
+                                                        }
+                                                    </Typography>
+                                                </Grid>
+                                                
+                                                {/* Valores Iniciais e Finais */}
+                                                <Grid item xs={12} sm={6} md={3}>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        Valor Inicial
+                                                    </Typography>
+                                                    <Typography variant="h6">
+                                                        R$ {register.initialAmount.toFixed(2)}
+                                                    </Typography>
+                                                </Grid>
+                                                <Grid item xs={12} sm={6} md={3}>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        Valor Final
+                                                    </Typography>
+                                                    <Typography variant="h6">
+                                                        R$ {register.currentAmount.toFixed(2)}
+                                                    </Typography>
+                                                </Grid>
+
+                                                {/* Totais por Método de Pagamento */}
+                                                {register.finalAmounts && (
+                                                    <Grid item xs={12}>
+                                                        <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+                                                            Valores por Método de Pagamento
+                                                        </Typography>
+                                                        <Grid container spacing={2}>
+                                                            {Object.entries(register.finalAmounts).map(([method, value]) => (
+                                                                <Grid item xs={6} sm={3} key={method}>
+                                                                    <Typography variant="body2" color="text.secondary">
+                                                                        {method.charAt(0).toUpperCase() + method.slice(1)}
+                                                                    </Typography>
+                                                                    <Typography variant="body1">
+                                                                        R$ {value.toFixed(2)}
+                                                                    </Typography>
+                                                                </Grid>
+                                                            ))}
+                                                        </Grid>
+                                                    </Grid>
+                                                )}
+
+                                                {/* Resumo de Transações */}
+                                                <Grid item xs={12}>
+                                                    <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+                                                        Resumo de Transações
+                                                    </Typography>
+                                                    <Grid container spacing={2}>
+                                                        <Grid item xs={6} sm={3}>
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                Total Vendas
+                                                            </Typography>
+                                                            <Typography variant="body1" color="success.main">
+                                                                R$ {register.closingSummary?.totalSales?.toFixed(2) || '0.00'}
+                                                            </Typography>
+                                                        </Grid>
+                                                        <Grid item xs={6} sm={3}>
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                Total Sangrias
+                                                            </Typography>
+                                                            <Typography variant="body1" color="error.main">
+                                                                R$ {register.closingSummary?.totalWithdrawals?.toFixed(2) || '0.00'}
+                                                            </Typography>
+                                                        </Grid>
+                                                    </Grid>
+                                                </Grid>
+                                            </Grid>
+                                        </Paper>
+                                    </Grid>
+                                ))}
+                            </Grid>
+                        )}
+                    </CardContent>
+                </Card>
+            </Box>
+        );
+    };
 
     return (
         <Box sx={{ p: 2 }}>
@@ -949,6 +1265,14 @@ const SalesPage = () => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
+
+            <CashClosingModal
+                open={showClosingModal}
+                onClose={() => setShowClosingModal(false)}
+                onSubmit={handleCloseCashRegister}
+                loading={loadingClosing}
+                cashData={cashClosingData}
+            />
         </Box>
     );
 };
