@@ -28,6 +28,10 @@ import PaymentProcessor from './PaymentProcessor';
 import { useConfig } from '../contexts/ConfigContext';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ConfigPanel from './ConfigPanel';
+import CashRegisterModal from './CashRegisterModal';
+import CashWithdrawalModal from './CashWithdrawalModal';
+import MoneyOffIcon from '@mui/icons-material/MoneyOff';
+import PasswordModal from './PasswordModal';
 
 const Home = () => {
     const [produtos, setProdutos] = useState([]);
@@ -78,6 +82,17 @@ const Home = () => {
 
     const [configOpen, setConfigOpen] = useState(false);
     const { nfeEnabled } = useConfig();
+
+    const [isCashRegisterOpen, setIsCashRegisterOpen] = useState(false);
+    const [showCashRegisterModal, setShowCashRegisterModal] = useState(false);
+    const [loadingCashRegister, setLoadingCashRegister] = useState(false);
+
+    const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
+    const [loadingWithdrawal, setLoadingWithdrawal] = useState(false);
+    const [currentCashAmount, setCurrentCashAmount] = useState(0);
+
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [showWithdrawalAfterPassword, setShowWithdrawalAfterPassword] = useState(false);
 
     const updateTopSellingProducts = useCallback(async () => {
     try {
@@ -595,264 +610,418 @@ const Home = () => {
         });
     };
 
+    // Verificar status do caixa ao carregar a página
+    useEffect(() => {
+        const checkCashRegisterStatus = async () => {
+            try {
+                const response = await axios.get(`${apiUrl}/api/cash-register`);
+                setIsCashRegisterOpen(response.data.isOpen);
+                if (response.data.data) {
+                    setCurrentCashAmount(response.data.data.currentAmount);
+                }
+                if (!response.data.isOpen) {
+                    setShowCashRegisterModal(true);
+                }
+            } catch (error) {
+                console.error('Erro ao verificar status do caixa:', error);
+                setSnackbar({
+                    open: true,
+                    message: 'Erro ao verificar status do caixa',
+                    severity: 'error'
+                });
+            }
+        };
+
+        checkCashRegisterStatus();
+    }, [apiUrl]);
+
+    const handleOpenCashRegister = async (initialAmount) => {
+        setLoadingCashRegister(true);
+        try {
+            await axios.post(`${apiUrl}/api/cash-register`, { initialAmount });
+            setIsCashRegisterOpen(true);
+            setShowCashRegisterModal(false);
+            setSnackbar({
+                open: true,
+                message: 'Caixa aberto com sucesso!',
+                severity: 'success'
+            });
+        } catch (error) {
+            console.error('Erro ao abrir caixa:', error);
+            setSnackbar({
+                open: true,
+                message: error.response?.data?.message || 'Erro ao abrir caixa',
+                severity: 'error'
+            });
+        } finally {
+            setLoadingCashRegister(false);
+        }
+    };
+
+    const handleWithdrawalClick = () => {
+        setShowPasswordModal(true);
+        setShowWithdrawalAfterPassword(true);
+    };
+
+    const handlePasswordSuccess = async (password) => {
+        try {
+            const response = await axios.post(`${apiUrl}/api/verify-password`, { password });
+            
+            if (response.data.isValid) {
+                setShowPasswordModal(false);
+                if (showWithdrawalAfterPassword) {
+                    setShowWithdrawalModal(true);
+                    setShowWithdrawalAfterPassword(false);
+                }
+            } else {
+                setSnackbar({
+                    open: true,
+                    message: 'Senha incorreta',
+                    severity: 'error'
+                });
+            }
+        } catch (error) {
+            console.error('Erro ao verificar senha:', error);
+            setSnackbar({
+                open: true,
+                message: 'Erro ao verificar senha',
+                severity: 'error'
+            });
+        }
+    };
+
+    const handlePasswordCancel = () => {
+        setShowPasswordModal(false);
+        setShowWithdrawalAfterPassword(false);
+    };
+
+    const handleWithdrawal = async (data) => {
+        setLoadingWithdrawal(true);
+        try {
+            const response = await axios.post(`${apiUrl}/api/cash-register/withdrawal`, {
+                amount: data.amount,
+                reason: data.reason
+            });
+
+            setCurrentCashAmount(response.data.currentAmount);
+            setShowWithdrawalModal(false);
+            setSnackbar({
+                open: true,
+                message: 'Sangria realizada com sucesso',
+                severity: 'success'
+            });
+        } catch (error) {
+            console.error('Erro ao realizar sangria:', error);
+            setSnackbar({
+                open: true,
+                message: error.response?.data?.message || 'Erro ao realizar sangria',
+                severity: 'error'
+            });
+        } finally {
+            setLoadingWithdrawal(false);
+        }
+    };
+
     return (
-        <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100vh' }}>
-            {/* Painel de Entrada de Produtos */}
-            <Box sx={{ 
-                width: isMobile ? '100%' : '60%', 
-                p: 2, 
-                borderRight: isMobile ? 0 : 1, 
-                borderBottom: isMobile ? 1 : 0, 
-                borderColor: 'divider',
-                overflowY: 'auto'
-            }}>
-                <Typography variant="h5" gutterBottom>
-                    Frente de Caixa
-                </Typography>
-
-                {/* Leitor de Código de Barras */}
-                <form onSubmit={handleBarcodeSubmit}>
-                    <Box sx={{ mb: 2 }}>
-                        <TextField
-                            fullWidth
-                            label="Código de Barras"
-                            value={barcodeInput}
-                            onChange={handleBarcodeInputChange}
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <IconButton onClick={() => isScannerActive ? stopScanner() : startScanner()}>
-                                            <BarcodeIcon color={isScannerActive ? "primary" : "inherit"} />
-                                        </IconButton>
-                                    </InputAdornment>
-                                ),
-                            }}
-                        />
-                        
-                        {/* Área do Scanner */}
-                        {isScannerActive && (
-                            <Box 
-                                sx={{ 
-                                    position: 'relative',
-                                    width: '100%',
-                                    height: '300px',
-                                    mt: 2,
-                                    overflow: 'hidden'
-                                }}
-                            >
-                                <div 
-                                    ref={scannerRef}
-                                    style={{
-                                        position: 'absolute',
-                                        top: 0,
-                                        left: 0,
-                                        width: '100%',
-                                        height: '100%'
-                                    }}
-                                />
-                                <Box
-                                    sx={{
-                                        position: 'absolute',
-                                        top: '50%',
-                                        left: '50%',
-                                        transform: 'translate(-50%, -50%)',
-                                        width: '80%',
-                                        height: '2px',
-                                        bgcolor: 'error.main',
-                                        boxShadow: '0 0 8px rgba(255,0,0,0.5)'
-                                    }}
-                                />
-                            </Box>
-                        )}
-                    </Box>
-                </form>
-
-                {/* Seleção de Produto e Quantidade */}
-                <Autocomplete
-                    options={produtos || []}
-                    getOptionLabel={(option) => {
-                        if (!option) return '';
-                        if (typeof option === 'string') return option;
-                        return option.name ? `${option.name} - R$ ${option.price.toFixed(2)} / ${option.unit}` : '';
-                    }}
-                    renderInput={(params) => (
-                        <TextField
-                            {...params}
-                            label="Produto"
-                            margin="normal"
-                            inputRef={produtoInputRef}
-                            onKeyDown={handleKeyDown}
-                            fullWidth
-                        />
-                    )}
-                    value={produtoSelecionado}
-                    onChange={handleAutocompleteChange}
-                    onInputChange={handleInputChange}
-                    inputValue={inputValue}
-                    isOptionEqualToValue={(option, value) => option._id === value._id}
-                    fullWidth
-                    freeSolo
-                    selectOnFocus
-                    clearOnBlur
-                    handleHomeEndKeys
-                />
-                <TextField
-                    type={isMobile ? "number" : "text"} // Altera para "number" em dispositivos móveis
-                    fullWidth
-                    label="Quantidade"
-                    value={quantidade}
-                    onChange={handleQuantidadeChange}
-                    onFocus={handleQuantidadeFocus}
-                    margin="normal"
-                    inputRef={quantidadeInputRef}
-                    onKeyDown={handleKeyDown}
-                    InputProps={{
-                        endAdornment: <InputAdornment position="end">{getUnidadeMedida()}</InputAdornment>,
-                        inputMode: isMobile ? "decimal" : "text", // Garante teclado numérico em dispositivos móveis
-                        pattern: isMobile ? "[0-9]*" : undefined, // Permite apenas números em dispositivos móveis
-                    }}
-                />
-                <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={adicionarAoCarrinho}
-                    disabled={!produtoSelecionado || !quantidade}
-                    fullWidth
-                    sx={{ mt: 2, mb: 2 }}
-                >
-                    Adicionar ao Carrinho
-                </Button>
-
-                {/* Lista de Produtos Mais Vendidos */}
-                <Box sx={{ mt: 2 }}>
-                    <Typography variant="subtitle1">Produtos mais vendidos</Typography>
-                    {topSellingProducts.map((product, index) => (
-                        <Chip
-                            key={product._id}
-                            label={`${index + 1}: ${product.name}`}
-                            onClick={() => setProdutoSelecionado(product)}
-                            sx={{ mr: 1, mb: 1 }}
-                        />
-                    ))}
-                </Box>
-            </Box>
-
-            {/* Painel do Carrinho e Finalização */}
-            <Box sx={{ 
-                width: isMobile ? '100%' : '70%',  // Ajuste a largura para caber no painel
-                p: 2, 
-                display: 'flex', 
-                flexDirection: 'column',
-                height: isMobile ? '100%' : '90%' // Ajuste a altura para caber no painel
-            }}>
-                <Typography variant="h6" gutterBottom>Carrinho de Compras</Typography>
-                <List sx={{ flexGrow: 1, overflowY: 'auto', maxHeight: isMobile ? '40vh' : '60vh' }}>
-                    {carrinho.map((item, index) => (
-                        <ListItem
-                            key={index}
-                            secondaryAction={
-                                <IconButton edge="end" aria-label="delete" onClick={() => removerDoCarrinho(index)}>
-                                    <DeleteIcon />
-                                </IconButton>
-                            }
-                            sx={{ 
-                                bgcolor: 'background.paper', 
-                                mb: 1, 
-                                borderRadius: 1,
-                                boxShadow: 1
-                            }}
-                        >
-                            <ListItemText
-                                primary={item.name}
-                                secondary={`${formatarQuantidade(item.quantidade, item.unit)} x R$ ${item.price.toFixed(2)} = R$ ${(item.price * item.quantidade).toFixed(2)}`}
-                            />
-                        </ListItem>
-                    ))}
-                </List>
-
-                <Box sx={{ mt: 2 }}>
-                    <Typography variant="h6">
-                        Total: R$ {carrinho.reduce((acc, item) => acc + item.price * item.quantidade, 0).toFixed(2)}
+        <>
+            <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100vh' }}>
+                {/* Painel de Entrada de Produtos */}
+                <Box sx={{ 
+                    width: isMobile ? '100%' : '60%', 
+                    p: 2, 
+                    borderRight: isMobile ? 0 : 1, 
+                    borderBottom: isMobile ? 1 : 0, 
+                    borderColor: 'divider',
+                    overflowY: 'auto'
+                }}>
+                    <Typography variant="h5" gutterBottom>
+                        Frente de Caixa
                     </Typography>
 
-                    <FormControl fullWidth sx={{ mt: 2 }}>
-                        <InputLabel id="payment-method-label">Método de Pagamento</InputLabel>
-                        <Select
-                            labelId="payment-method-label"
-                            value={paymentMethod || ''} // Garante que seja string
-                            onChange={handlePaymentMethodChange}
-                            label="Método de Pagamento"
-                        >
-                            <MenuItem value="">Selecione um método</MenuItem>
-                            <MenuItem value="dinheiro">Dinheiro</MenuItem>
-                            <MenuItem value="cartao_credito">Cartão de Crédito</MenuItem>
-                            <MenuItem value="cartao_debito">Cartão de Débito</MenuItem>
-                            <MenuItem value="pix">PIX</MenuItem>
-                        </Select>
-                    </FormControl>
+                    {/* Leitor de Código de Barras */}
+                    <form onSubmit={handleBarcodeSubmit}>
+                        <Box sx={{ mb: 2 }}>
+                            <TextField
+                                fullWidth
+                                label="Código de Barras"
+                                value={barcodeInput}
+                                onChange={handleBarcodeInputChange}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <IconButton onClick={() => isScannerActive ? stopScanner() : startScanner()}>
+                                                <BarcodeIcon color={isScannerActive ? "primary" : "inherit"} />
+                                            </IconButton>
+                                        </InputAdornment>
+                                    ),
+                                }}
+                            />
+                            
+                            {/* Área do Scanner */}
+                            {isScannerActive && (
+                                <Box 
+                                    sx={{ 
+                                        position: 'relative',
+                                        width: '100%',
+                                        height: '300px',
+                                        mt: 2,
+                                        overflow: 'hidden'
+                                    }}
+                                >
+                                    <div 
+                                        ref={scannerRef}
+                                        style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            width: '100%',
+                                            height: '100%'
+                                        }}
+                                    />
+                                    <Box
+                                        sx={{
+                                            position: 'absolute',
+                                            top: '50%',
+                                            left: '50%',
+                                            transform: 'translate(-50%, -50%)',
+                                            width: '80%',
+                                            height: '2px',
+                                            bgcolor: 'error.main',
+                                            boxShadow: '0 0 8px rgba(255,0,0,0.5)'
+                                        }}
+                                    />
+                                </Box>
+                            )}
+                        </Box>
+                    </form>
 
+                    {/* Seleção de Produto e Quantidade */}
+                    <Autocomplete
+                        options={produtos || []}
+                        getOptionLabel={(option) => {
+                            if (!option) return '';
+                            if (typeof option === 'string') return option;
+                            return option.name ? `${option.name} - R$ ${option.price.toFixed(2)} / ${option.unit}` : '';
+                        }}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                label="Produto"
+                                margin="normal"
+                                inputRef={produtoInputRef}
+                                onKeyDown={handleKeyDown}
+                                fullWidth
+                            />
+                        )}
+                        value={produtoSelecionado}
+                        onChange={handleAutocompleteChange}
+                        onInputChange={handleInputChange}
+                        inputValue={inputValue}
+                        isOptionEqualToValue={(option, value) => option._id === value._id}
+                        fullWidth
+                        freeSolo
+                        selectOnFocus
+                        clearOnBlur
+                        handleHomeEndKeys
+                    />
+                    <TextField
+                        type={isMobile ? "number" : "text"} // Altera para "number" em dispositivos móveis
+                        fullWidth
+                        label="Quantidade"
+                        value={quantidade}
+                        onChange={handleQuantidadeChange}
+                        onFocus={handleQuantidadeFocus}
+                        margin="normal"
+                        inputRef={quantidadeInputRef}
+                        onKeyDown={handleKeyDown}
+                        InputProps={{
+                            endAdornment: <InputAdornment position="end">{getUnidadeMedida()}</InputAdornment>,
+                            inputMode: isMobile ? "decimal" : "text", // Garante teclado numérico em dispositivos móveis
+                            pattern: isMobile ? "[0-9]*" : undefined, // Permite apenas números em dispositivos móveis
+                        }}
+                    />
                     <Button
                         variant="contained"
-                        color="secondary"
-                        onClick={finalizarVenda}
-                        startIcon={isFinalizingVenda ? <CircularProgress size={24} color="inherit" /> : <PaymentIcon />}
+                        color="primary"
+                        onClick={adicionarAoCarrinho}
+                        disabled={!produtoSelecionado || !quantidade}
                         fullWidth
-                        disabled={!paymentMethod || isFinalizingVenda || carrinho.length === 0}
-                        sx={{ mt: 2 }}
+                        sx={{ mt: 2, mb: 2 }}
                     >
-                        {isFinalizingVenda ? 'Finalizando...' : 'Finalizar Venda'}
+                        Adicionar ao Carrinho
                     </Button>
 
-                    <Button
-                        color="error"
-                        onClick={cancelarVenda}
-                        startIcon={<CancelIcon />}
-                        variant="outlined"
-                        disabled={carrinho.length === 0}
-                        fullWidth
-                        sx={{ mt: 2 }}
-                    >
-                        Cancelar Venda
-                    </Button>
+                    {/* Lista de Produtos Mais Vendidos */}
+                    <Box sx={{ mt: 2 }}>
+                        <Typography variant="subtitle1">Produtos mais vendidos</Typography>
+                        {topSellingProducts.map((product, index) => (
+                            <Chip
+                                key={product._id}
+                                label={`${index + 1}: ${product.name}`}
+                                onClick={() => setProdutoSelecionado(product)}
+                                sx={{ mr: 1, mb: 1 }}
+                            />
+                        ))}
+                    </Box>
                 </Box>
+
+                {/* Painel do Carrinho e Finalização */}
+                <Box sx={{ 
+                    width: isMobile ? '100%' : '70%',  // Ajuste a largura para caber no painel
+                    p: 2, 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    height: isMobile ? '100%' : '90%' // Ajuste a altura para caber no painel
+                }}>
+                    <Typography variant="h6" gutterBottom>Carrinho de Compras</Typography>
+                    <List sx={{ flexGrow: 1, overflowY: 'auto', maxHeight: isMobile ? '40vh' : '60vh' }}>
+                        {carrinho.map((item, index) => (
+                            <ListItem
+                                key={index}
+                                secondaryAction={
+                                    <IconButton edge="end" aria-label="delete" onClick={() => removerDoCarrinho(index)}>
+                                        <DeleteIcon />
+                                    </IconButton>
+                                }
+                                sx={{ 
+                                    bgcolor: 'background.paper', 
+                                    mb: 1, 
+                                    borderRadius: 1,
+                                    boxShadow: 1
+                                }}
+                            >
+                                <ListItemText
+                                    primary={item.name}
+                                    secondary={`${formatarQuantidade(item.quantidade, item.unit)} x R$ ${item.price.toFixed(2)} = R$ ${(item.price * item.quantidade).toFixed(2)}`}
+                                />
+                            </ListItem>
+                        ))}
+                    </List>
+
+                    <Box sx={{ mt: 2 }}>
+                        <Typography variant="h6">
+                            Total: R$ {carrinho.reduce((acc, item) => acc + item.price * item.quantidade, 0).toFixed(2)}
+                        </Typography>
+
+                        <FormControl fullWidth sx={{ mt: 2 }}>
+                            <InputLabel id="payment-method-label">Método de Pagamento</InputLabel>
+                            <Select
+                                labelId="payment-method-label"
+                                value={paymentMethod || ''} // Garante que seja string
+                                onChange={handlePaymentMethodChange}
+                                label="Método de Pagamento"
+                            >
+                                <MenuItem value="">Selecione um método</MenuItem>
+                                <MenuItem value="dinheiro">Dinheiro</MenuItem>
+                                <MenuItem value="cartao_credito">Cartão de Crédito</MenuItem>
+                                <MenuItem value="cartao_debito">Cartão de Débito</MenuItem>
+                                <MenuItem value="pix">PIX</MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        <Button
+                            variant="contained"
+                            color="secondary"
+                            onClick={finalizarVenda}
+                            startIcon={isFinalizingVenda ? <CircularProgress size={24} color="inherit" /> : <PaymentIcon />}
+                            fullWidth
+                            disabled={!paymentMethod || isFinalizingVenda || carrinho.length === 0}
+                            sx={{ mt: 2 }}
+                        >
+                            {isFinalizingVenda ? 'Finalizando...' : 'Finalizar Venda'}
+                        </Button>
+
+                        <Button
+                            color="error"
+                            onClick={cancelarVenda}
+                            startIcon={<CancelIcon />}
+                            variant="outlined"
+                            disabled={carrinho.length === 0}
+                            fullWidth
+                            sx={{ mt: 2 }}
+                        >
+                            Cancelar Venda
+                        </Button>
+
+                        <Button
+                            variant="outlined"
+                            color="warning"
+                            onClick={handleWithdrawalClick}
+                            startIcon={<MoneyOffIcon />}
+                            disabled={!isCashRegisterOpen}
+                            sx={{ mt: 2 }}
+                            fullWidth
+                        >
+                            Realizar Sangria
+                        </Button>
+                    </Box>
+                </Box>
+
+                {/* PaymentProcessor */}
+                <PaymentProcessor
+                    open={showPaymentProcessor}
+                    onClose={() => setShowPaymentProcessor(false)}
+                    saleTotal={currentSaleData?.total || 0}
+                    saleId={currentSaleData?.id}
+                    onSuccess={handlePaymentSuccess}
+                    onError={handlePaymentError}
+                />
+
+                {/* Snackbar para mensagens */}
+                <Snackbar
+                    open={snackbar.open}
+                    autoHideDuration={3000}
+                    onClose={handleCloseSnackbar}
+                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                >
+                    <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+                        {snackbar.message}
+                    </Alert>
+                </Snackbar>
+
+                {/* Adicione o botão de configurações */}
+                <IconButton
+                    onClick={() => setConfigOpen(true)}
+                    sx={{ position: 'absolute', top: 16, right: 16 }}
+                >
+                    <SettingsIcon />
+                </IconButton>
+
+                {/* Adicione o painel de configurações */}
+                <ConfigPanel
+                    open={configOpen}
+                    onClose={() => setConfigOpen(false)}
+                />
             </Box>
 
-            {/* PaymentProcessor */}
-            <PaymentProcessor
-                open={showPaymentProcessor}
-                onClose={() => setShowPaymentProcessor(false)}
-                saleTotal={currentSaleData?.total || 0}
-                saleId={currentSaleData?.id}
-                onSuccess={handlePaymentSuccess}
-                onError={handlePaymentError}
+            <CashRegisterModal
+                open={showCashRegisterModal}
+                onClose={() => {
+                    if (!isCashRegisterOpen) {
+                        navigate('/');
+                    }
+                    setShowCashRegisterModal(false);
+                }}
+                onSubmit={handleOpenCashRegister}
+                loading={loadingCashRegister}
             />
 
-            {/* Snackbar para mensagens */}
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={3000}
-                onClose={handleCloseSnackbar}
-                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-            >
-                <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
-
-            {/* Adicione o botão de configurações */}
-            <IconButton
-                onClick={() => setConfigOpen(true)}
-                sx={{ position: 'absolute', top: 16, right: 16 }}
-            >
-                <SettingsIcon />
-            </IconButton>
-
-            {/* Adicione o painel de configurações */}
-            <ConfigPanel
-                open={configOpen}
-                onClose={() => setConfigOpen(false)}
+            <CashWithdrawalModal
+                open={showWithdrawalModal}
+                onClose={() => setShowWithdrawalModal(false)}
+                onSubmit={handleWithdrawal}
+                loading={loadingWithdrawal}
+                currentAmount={currentCashAmount}
             />
-        </Box>
+
+            <PasswordModal
+                open={showPasswordModal}
+                onSuccess={handlePasswordSuccess}
+                onClose={handlePasswordCancel}
+                title="Confirmar Senha"
+                message="Digite a senha para realizar a sangria"
+            />
+        </>
     );
 };
 

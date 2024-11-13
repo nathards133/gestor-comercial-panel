@@ -1,14 +1,19 @@
 import React, { useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Alert } from '@mui/material';
 
-const PasswordModal = ({ open, onClose, onSubmit, title, alert }) => {
+const PasswordModal = ({ open, onClose, onSuccess, title, message }) => {
   const [password, setPassword] = useState('');
 
   const handleSubmit = () => {
     if (password.length === 4) {
-      onSubmit(password);
+      onSuccess(password);
       setPassword('');
     }
+  };
+
+  const handleClose = () => {
+    setPassword('');
+    onClose();
   };
 
   const handleKeyPress = (event) => {
@@ -18,10 +23,14 @@ const PasswordModal = ({ open, onClose, onSubmit, title, alert }) => {
   };
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={handleClose}>
       <DialogTitle>{title}</DialogTitle>
-      {alert && <Alert severity="info" sx={{ mb: 2 }}>{alert}</Alert>}
       <DialogContent>
+        {message && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {message}
+          </Alert>
+        )}
         <TextField
           autoFocus
           margin="dense"
@@ -35,7 +44,7 @@ const PasswordModal = ({ open, onClose, onSubmit, title, alert }) => {
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancelar</Button>
+        <Button onClick={handleClose}>Cancelar</Button>
         <Button onClick={handleSubmit} disabled={password.length !== 4}>
           Confirmar
         </Button>

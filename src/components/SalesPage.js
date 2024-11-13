@@ -28,7 +28,8 @@ import {
     IconButton,
     Snackbar,
     LinearProgress,
-    Tooltip
+    Tooltip,
+    Divider
 } from '@mui/material';
 import WarningMessage from './WarningMessage';
 import PaymentNotificationList from './PaymentNotificationList';
@@ -186,6 +187,8 @@ const SalesPage = () => {
     });
 
     const [totalSalesByPaymentMethod, setTotalSalesByPaymentMethod] = useState({});
+
+    const [cashRegisterData, setCashRegisterData] = useState([]);
 
     const calculateSalesByPaymentMethod = useCallback((salesData) => {
         const methodTotals = salesData.reduce((acc, sale) => {
@@ -542,14 +545,155 @@ const SalesPage = () => {
         return { totalNetProfit, totalProfitMargin };
     }, [totalSalesValue, accountsStats.totalExpenses]);
 
+    const renderCashRegisterSummary = () => {
+        if (!cashRegisterData || !cashRegisterData.length) return null;
+
+        const formatDate = (date) => {
+            return new Date(date).toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        };
+
+        const getCardTitle = () => {
+            switch (tabValue) {
+                case 0:
+                    return 'Movimentações do Caixa (Hoje)';
+                case 1:
+                    return 'Movimentações do Caixa (Semana)';
+                case 2:
+                    return 'Movimentações do Caixa (Mês)';
+                default:
+                    return 'Movimentações do Caixa';
+            }
+        };
+
+        return (
+            <Card sx={{ mb: 3 }}>
+                <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                        {getCardTitle()}
+                    </Typography>
+                    <Grid container spacing={2}>
+                        {cashRegisterData.map((register, index) => {
+                            // Calcula o total de sangrias
+                            const withdrawals = register.transactions.filter(t => t.type === 'withdrawal');
+                            const totalWithdrawals = withdrawals.reduce((acc, curr) => acc + curr.amount, 0);
+                            
+                            // Calcula o total de vendas
+                            const sales = register.transactions.filter(t => t.type === 'sale');
+                            const totalSales = sales.reduce((acc, curr) => acc + curr.amount, 0);
+
+                            return (
+                                <Grid item xs={12} key={register._id}>
+                                    <Box sx={{ 
+                                        mb: 2,
+                                        p: 2,
+                                        border: '1px solid #e0e0e0',
+                                        borderRadius: 1,
+                                        bgcolor: register.status === 'open' ? '#e3f2fd' : '#fff'
+                                    }}>
+                                        <Typography variant="subtitle1" sx={{ fontWeight: 'medium', mb: 1 }}>
+                                            Caixa {index + 1} - {formatDate(register.openedAt)}
+                                            {register.closedAt && ` até ${formatDate(register.closedAt)}`}
+                                        </Typography>
+                                        
+                                        <Grid container spacing={2}>
+                                            <Grid item xs={12} sm={6}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Valor Inicial
+                                                </Typography>
+                                                <Typography variant="h6">
+                                                    R$ {register.initialAmount.toFixed(2).replace('.', ',')}
+                                                </Typography>
+                                            </Grid>
+                                            
+                                            <Grid item xs={12} sm={6}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    {register.status === 'open' ? 'Valor Atual' : 'Valor Final'}
+                                                </Typography>
+                                                <Typography variant="h6">
+                                                    R$ {register.currentAmount.toFixed(2).replace('.', ',')}
+                                                </Typography>
+                                            </Grid>
+                                            
+                                            <Grid item xs={12} sm={6}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Total em Vendas
+                                                </Typography>
+                                                <Typography variant="h6" color="success.main">
+                                                    R$ {totalSales.toFixed(2).replace('.', ',')}
+                                                </Typography>
+                                            </Grid>
+                                            
+                                            <Grid item xs={12} sm={6}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Total em Sangrias
+                                                </Typography>
+                                                <Typography variant="h6" color="error.main">
+                                                    R$ {totalWithdrawals.toFixed(2).replace('.', ',')}
+                                                </Typography>
+                                            </Grid>
+                                        </Grid>
+
+                                        <Typography 
+                                            variant="body2" 
+                                            sx={{ 
+                                                mt: 2,
+                                                color: register.status === 'open' ? 'success.main' : 'text.secondary',
+                                                fontWeight: 'medium'
+                                            }}
+                                        >
+                                            Status: {register.status === 'open' ? 'Aberto' : 'Fechado'}
+                                        </Typography>
+                                    </Box>
+                                    {index < cashRegisterData.length - 1 && <Divider />}
+                                </Grid>
+                            );
+                        })}
+                    </Grid>
+                </CardContent>
+            </Card>
+        );
+    };
+
+    useEffect(() => {
+        const fetchSales = async () => {
+            setLoading(true);
+            try {
+                const response = await axios.get(`${API_URL}/api/sales`, {
+                    params: { period: tabValue }
+                });
+                
+                setSales(response.data.sales || []);
+                setPeriodInfo(response.data.periodInfo || null);
+                if (response.data.financialSummary?.cashRegisterData) {
+                    setCashRegisterData(response.data.financialSummary.cashRegisterData);
+                }
+                
+                // ... resto do código existente ...
+            } catch (error) {
+                console.error('Erro ao buscar vendas:', error);
+                setError('Falha ao carregar as vendas');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchSales();
+    }, [tabValue, API_URL]);
+
     return (
         <Box sx={{ p: 2 }}>
             <PasswordModal
                 open={isPasswordModalOpen}
                 onClose={handlePasswordModalClose}
-                onSubmit={handlePasswordSubmit}
+                onSuccess={handlePasswordSubmit}
                 title="Digite a senha para acessar as vendas"
-                alert="Somente administradores podem acessar esta página."
+                message="É necessário digitar a senha para visualizar as informações de vendas"
             />
             
             {isPasswordModalOpen ? (
@@ -679,6 +823,8 @@ const SalesPage = () => {
                                             />
                                         </Grid>
                                     </Grid>
+
+                                    {renderCashRegisterSummary()}
                                 </>
                             )}
 
