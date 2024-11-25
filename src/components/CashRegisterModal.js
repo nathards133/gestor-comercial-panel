@@ -1,116 +1,83 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Button,
-  Typography,
-  Box,
-  CircularProgress,
-  Alert
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
+    Button,
+    Alert,
+    Box,
+    Typography,
+    Tooltip,
+    IconButton
 } from '@mui/material';
-import { formatCurrency } from '../utils/formatters';
+import InfoIcon from '@mui/icons-material/Info';
 
 const CashRegisterModal = ({ open, onClose, onSubmit, loading }) => {
-  const [initialAmount, setInitialAmount] = useState('');
-  const [error, setError] = useState('');
+    const [initialAmount, setInitialAmount] = useState('');
+    const [cashLimit, setCashLimit] = useState('');
 
-  useEffect(() => {
-    if (!open) {
-      setInitialAmount('');
-      setError('');
-    }
-  }, [open]);
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        onSubmit({
+            initialAmount: Number(initialAmount.replace(',', '.')),
+            cashLimit: Number(cashLimit.replace(',', '.'))
+        });
+    };
 
-  const formatCurrency = (value) => {
-    value = value.replace(/\D/g, '');
-    value = value.replace(/^0+/, '');
-    value = value.padStart(3, '0');
-    value = value.slice(0, -2) + ',' + value.slice(-2);
-    return value;
-  };
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+            <DialogTitle>Abrir Caixa</DialogTitle>
+            <DialogContent>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                    O limite de caixa é utilizado para notificar quando o valor em dinheiro físico atingir o limite estabelecido. 
+                    Isso ajuda a manter um controle seguro do dinheiro em caixa.
+                </Alert>
 
-  const handleSubmit = () => {
-    const amount = parseFloat(initialAmount.replace(',', '.'));
-    
-    if (isNaN(amount) || amount <= 0) {
-      setError('Por favor, insira um valor válido maior que zero');
-      return;
-    }
+                <TextField
+                    autoFocus
+                    margin="dense"
+                    label="Valor Inicial"
+                    type="text"
+                    fullWidth
+                    value={initialAmount}
+                    onChange={(e) => setInitialAmount(e.target.value)}
+                    sx={{ mb: 2 }}
+                />
 
-    onSubmit(amount);
-  };
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <TextField
+                        margin="dense"
+                        label="Limite de Dinheiro em Caixa"
+                        type="text"
+                        fullWidth
+                        value={cashLimit}
+                        onChange={(e) => setCashLimit(e.target.value)}
+                    />
+                    <Tooltip title="Quando o valor em dinheiro no caixa atingir este limite, você receberá notificações para realizar uma sangria." arrow>
+                        <IconButton size="small">
+                            <InfoIcon />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
 
-  const handleAmountChange = (event) => {
-    let value = event.target.value.replace(/\D/g, '');
-    
-    if (value) {
-      const formatted = formatCurrency(value);
-      setInitialAmount(formatted);
-    } else {
-      setInitialAmount('');
-    }
-    setError('');
-  };
-
-  return (
-    <Dialog 
-      open={open} 
-      onClose={loading ? undefined : onClose}
-      maxWidth="sm" 
-      fullWidth
-      disableEscapeKeyDown  // Impede fechamento com ESC
-      disableBackdropClick  // Impede fechamento ao clicar fora
-    >
-      <DialogTitle>Abertura de Caixa</DialogTitle>
-      <DialogContent>
-        <Box sx={{ p: 2 }}>
-          <Typography variant="body1" gutterBottom>
-            Insira o valor inicial do caixa (fundo de caixa)
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Você pode fechar esta janela e abrir o caixa mais tarde.
-          </Typography>
-          <TextField
-            fullWidth
-            label="Valor Inicial"
-            value={initialAmount}
-            onChange={handleAmountChange}
-            disabled={loading}
-            error={!!error}
-            helperText={error}
-            InputProps={{
-              startAdornment: <Typography sx={{ mr: 1 }}>R$</Typography>
-            }}
-            sx={{ mt: 2 }}
-          />
-          {loading && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-              <CircularProgress size={24} />
-            </Box>
-          )}
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button 
-          onClick={onClose}
-          disabled={loading}
-        >
-          Cancelar
-        </Button>
-        <Button 
-          onClick={handleSubmit} 
-          variant="contained" 
-          color="primary"
-          disabled={loading || !initialAmount}
-        >
-          Abrir Caixa
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    * Você continuará podendo realizar vendas mesmo após atingir o limite.
+                </Typography>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose}>Cancelar</Button>
+                <Button 
+                    onClick={handleSubmit} 
+                    variant="contained" 
+                    disabled={loading || !initialAmount || !cashLimit}
+                >
+                    {loading ? 'Abrindo...' : 'Abrir Caixa'}
+                </Button>
+            </DialogActions>
+        </Dialog>
+    );
 };
 
 export default CashRegisterModal; 

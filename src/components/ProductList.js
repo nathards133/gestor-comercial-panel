@@ -61,6 +61,7 @@ import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale'; 
 import { format, parse } from 'date-fns';
+import MarginCalculator from './MarginCalculator';
 
 const ProductList = () => {
     const [products, setProducts] = useState([]);
@@ -103,7 +104,7 @@ const ProductList = () => {
     const [isFiltersApplied, setIsFiltersApplied] = useState(false);
     const [expirationDate, setExpirationDate] = useState(null);
     const navigate = useNavigate();
-
+    const [marginCalculatorOpen, setMarginCalculatorOpen] = useState(false);
     useEffect(() => {
         const savedFilters = JSON.parse(localStorage.getItem('productFilters')) || {};
         setSortBy(savedFilters.sortBy || 'name');
@@ -803,7 +804,12 @@ const ProductList = () => {
             />
 
             <Dialog open={openDialog} onClose={handleCloseDialog} fullScreen={isMobile}>
-                <DialogTitle>Adicionar Novo Produto</DialogTitle>
+                <DialogTitle>
+                    <Typography variant="h6">Adicionar Novo Produto</Typography>
+                    <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                        Preencha os dados do produto com atenção. Informações precisas ajudam no controle do seu estoque.
+                    </Typography>
+                </DialogTitle>
                 <DialogContent>
                     {renderBusinessTypeWarning()}
                     <TextField
@@ -816,13 +822,13 @@ const ProductList = () => {
                         value={newProduct.name}
                         onChange={handleInputChange}
                         error={!!errors.name}
-                        helperText={errors.name}
+                        helperText={errors.name || "Digite o nome completo do produto. Ex: 'Arroz Tipo 1 Marca X 5kg' em vez de apenas 'Arroz'"}
                     />
                     <NumericFormat
                         customInput={TextField}
                         margin="dense"
                         name="price"
-                        label="Preço"
+                        label="Preço de Venda"
                         fullWidth
                         value={newProduct.price}
                         onValueChange={handlePriceChange}
@@ -834,17 +840,19 @@ const ProductList = () => {
                         allowNegative={false}
                         isNumericString
                         error={!!errors.price}
-                        helperText={errors.price}
+                        helperText={errors.price || "Digite o preço final de venda ao cliente. Use o botão 'Calcular Margem' para ajuda com a precificação"}
                         InputProps={{
                             endAdornment: (
                                 <InputAdornment position="end">
-                                    <IconButton
-                                        edge="end"
-                                        onClick={moveCursorToCents}
-                                        size="small"
-                                    >
-                                        <ArrowForwardIcon />
-                                    </IconButton>
+                                    <Tooltip title="Clique para mover o cursor para os centavos">
+                                        <IconButton
+                                            edge="end"
+                                            onClick={moveCursorToCents}
+                                            size="small"
+                                        >
+                                            <ArrowForwardIcon />
+                                        </IconButton>
+                                    </Tooltip>
                                 </InputAdornment>
                             ),
                         }}
@@ -853,13 +861,17 @@ const ProductList = () => {
                     <TextField
                         margin="dense"
                         name="quantity"
-                        label="Quantidade"
+                        label="Quantidade em Estoque"
                         type="number"
                         fullWidth
                         value={newProduct.quantity}
                         onChange={handleInputChange}
                         error={!!errors.quantity}
-                        helperText={errors.quantity}
+                        helperText={errors.quantity || `Digite a quantidade total disponível em estoque. ${
+                            user.businessType === 'Açougue' ? 'Para carnes, use o peso total em kg.' :
+                            user.businessType === 'Padaria' ? 'Para produtos a granel, use o peso total em kg ou g.' :
+                            'Para produtos unitários, digite o número de unidades.'
+                        }`}
                     />
                     <TextField
                         margin="dense"
@@ -870,13 +882,15 @@ const ProductList = () => {
                         value={newProduct.barcode}
                         onChange={handleInputChange}
                         error={!!errors.barcode}
-                        helperText={errors.barcode}
+                        helperText={errors.barcode || "Use o leitor de código de barras ou digite manualmente. Para produtos sem código, crie um código interno único"}
                         InputProps={{
                             endAdornment: (
                                 <InputAdornment position="end">
-                                    <IconButton onClick={openBarcodeScanner}>
-                                        <CropFreeIcon />
-                                    </IconButton>
+                                    <Tooltip title="Usar câmera para ler código de barras">
+                                        <IconButton onClick={openBarcodeScanner}>
+                                            <CropFreeIcon />
+                                        </IconButton>
+                                    </Tooltip>
                                 </InputAdornment>
                             ),
                         }}
@@ -885,12 +899,16 @@ const ProductList = () => {
                         select
                         margin="dense"
                         name="unit"
-                        label="Unidade"
+                        label="Unidade de Medida"
                         fullWidth
                         value={newProduct.unit}
                         onChange={handleInputChange}
                         error={!!errors.unit}
-                        helperText={errors.unit}
+                        helperText={errors.unit || `Selecione a unidade adequada para seu produto. ${
+                            user.businessType === 'Açougue' ? 'Para carnes, use kg.' :
+                            user.businessType === 'Padaria' ? 'Para pães e doces, use unidade ou kg.' :
+                            'Escolha a unidade que melhor representa como você vende o produto.'
+                        }`}
                     >
                         {getUnitOptions().map((option) => (
                             <MenuItem key={option} value={option}>
@@ -899,22 +917,63 @@ const ProductList = () => {
                         ))}
                     </TextField>
 
-                    <LocalizationProvider dateAdapter={AdapterDateFns} locale={ptBR}> {/* Envolvendo com LocalizationProvider */}
+                    <TextField
+                        margin="dense"
+                        name="minStockLevel"
+                        label="Quantidade Mínima em Estoque"
+                        type="number"
+                        fullWidth
+                        value={newProduct.minStockLevel}
+                        onChange={handleInputChange}
+                        helperText="Defina um valor mínimo para ser alertado quando o estoque estiver baixo. Recomendamos: 20% da quantidade máxima que você costuma manter"
+                    />
+
+                    <LocalizationProvider dateAdapter={AdapterDateFns} locale={ptBR}>
                         <DatePicker
                             label="Data de Validade"
                             value={newProduct.expirationDate ? parse(newProduct.expirationDate, 'dd/MM/yyyy', new Date()) : null}
                             onChange={handleDateChange}
                             format="dd/MM/yyyy"
-                            renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
+                            renderInput={(params) => (
+                                <TextField 
+                                    {...params} 
+                                    fullWidth 
+                                    margin="normal"
+                                    helperText="Importante para controle de produtos perecíveis. Você receberá alertas quando a data estiver próxima"
+                                />
+                            )}
                         />
                     </LocalizationProvider>
+
+                    <Box sx={{ mt: 2, bgcolor: 'info.light', p: 2, borderRadius: 1 }}>
+                        <Typography variant="subtitle2" color="info.contrastText">
+                            💡 Dicas para um bom cadastro:
+                        </Typography>
+                        <ul>
+                            <li>Use nomes descritivos e completos</li>
+                            <li>Mantenha as quantidades sempre atualizadas</li>
+                            <li>Configure alertas de estoque mínimo para nunca ficar sem produtos</li>
+                            <li>Para produtos perecíveis, sempre inclua a data de validade</li>
+                        </ul>
+                    </Box>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleCloseDialog}>Cancelar</Button>
+                    <Tooltip title="Ajuda para calcular o preço de venda ideal">
+                        <Button onClick={() => setMarginCalculatorOpen(true)}>
+                            Calcular Margem
+                        </Button>
+                    </Tooltip>
                     <Button onClick={handleSaveProduct} color="primary" disabled={loading}>
                         {loading ? <CircularProgress size={24} /> : 'Salvar'}
                     </Button>
                 </DialogActions>
+
+                <MarginCalculator
+                    open={marginCalculatorOpen}
+                    onClose={() => setMarginCalculatorOpen(false)}
+                    product={newProduct}
+                />
             </Dialog>
 
             <Snackbar

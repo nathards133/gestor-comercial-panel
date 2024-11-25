@@ -94,6 +94,9 @@ const Home = () => {
     const [showPasswordModal, setShowPasswordModal] = useState(false);
     const [showWithdrawalAfterPassword, setShowWithdrawalAfterPassword] = useState(false);
 
+    const [isOverLimit, setIsOverLimit] = useState(false);
+    const audioRef = useRef(new Audio('/alert-sound.mp3'));
+
     const updateTopSellingProducts = useCallback(async () => {
     try {
         const response = await axios.get(`${apiUrl}/api/products/top-selling`);
@@ -317,6 +320,24 @@ const Home = () => {
     }, [adicionarAoCarrinho, activeStep, produtos,produtoSelecionado]); 
     
 
+    const checkCashLimit = useCallback(async () => {
+        try {
+            const response = await axios.get(`${apiUrl}/api/cash-register`);
+            if (response.data.isOverLimit) {
+                setIsOverLimit(true);
+                audioRef.current.play();
+                setSnackbar({
+                    open: true,
+                    message: 'ATENÇÃO: Limite de dinheiro em caixa atingido! Chame um responsável para realizar a sangria.',
+                    severity: 'warning',
+                    autoHideDuration: null
+                });
+            }
+        } catch (error) {
+            console.error('Erro ao verificar limite de caixa:', error);
+        }
+    }, [apiUrl]);
+
     const finalizarVenda = useCallback(async () => {
         const saleTotal = carrinho.reduce((acc, item) => acc + item.price * item.quantidade, 0);
         
@@ -327,6 +348,10 @@ const Home = () => {
                 items: carrinho,
                 paymentMethod: paymentMethod
             });
+
+            if (paymentMethod === 'dinheiro') {
+                await checkCashLimit();
+            }
 
             // Gerar nota fiscal apenas se estiver habilitado
             let nfeResponse = null;
@@ -376,7 +401,7 @@ const Home = () => {
         } finally {
             setIsFinalizingVenda(false);
         }
-    }, [carrinho, paymentMethod, apiUrl, updateTopSellingProducts, addNotification, nfeEnabled]);
+    }, [carrinho, paymentMethod, apiUrl, updateTopSellingProducts, addNotification, nfeEnabled, checkCashLimit]);
 
     const handleAutocompleteChange = useCallback((event, newValue) => {
         setProdutoSelecionado(newValue);

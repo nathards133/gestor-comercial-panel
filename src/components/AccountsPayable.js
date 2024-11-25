@@ -497,7 +497,7 @@ const AccountsPayable = () => {
         )}
 
         <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)} sx={{ mb: 2 }}>
-          <Tab label="Contas Pontuais" />
+          <Tab label="Contas Eventuais" />
           <Tab label="Contas Recorrentes" />
           <Tab label="Contas Parceladas" />
         </Tabs>
