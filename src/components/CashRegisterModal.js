@@ -61,6 +61,8 @@ const CashRegisterModal = ({ open, onClose, onSubmit, loading }) => {
       onClose={loading ? undefined : onClose}
       maxWidth="sm" 
       fullWidth
+      disableEscapeKeyDown  // Impede fechamento com ESC
+      disableBackdropClick  // Impede fechamento ao clicar fora
     >
       <DialogTitle>Abertura de Caixa</DialogTitle>
       <DialogContent>

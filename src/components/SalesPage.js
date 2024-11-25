@@ -849,8 +849,11 @@ const SalesPage = () => {
             setShowClosingModal(false);
             setCashRegisterData([]); // Limpa os dados do caixa atual
             
-            // Busca todos os caixas do dia
-            fetchDailyCashRegisters();
+            // Atualiza todos os dados necessários
+            await Promise.all([
+                fetchDailyCashRegisters(),
+                fetchCashRegisterData(),
+            ]);
             
             setSnackbar({
                 open: true,
