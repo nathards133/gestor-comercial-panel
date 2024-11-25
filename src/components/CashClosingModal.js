@@ -1,3 +1,4 @@
+/* eslint-disable default-case */
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -16,57 +17,110 @@ import {
 
 const CashClosingModal = ({ open, onClose, onSubmit, loading, cashData }) => {
   const [values, setValues] = useState({
-    cash: '',
-    credit: '',
-    debit: '',
+    dinheiro: '',
+    credito: '',
+    debito: '',
     pix: ''
   });
   const [observation, setObservation] = useState('');
   const [error, setError] = useState('');
 
+  const calculateExpectedBalances = (transactions, initialAmount) => {
+    console.log('Calculando saldos esperados:', { transactions, initialAmount });
+    
+    const balances = {
+      dinheiro: initialAmount || 0,
+      credito: 0,
+      debito: 0,
+      pix: 0
+    };
+
+    if (!transactions) return balances;
+
+    transactions.forEach(transaction => {
+      const amount = Number(transaction.amount) || 0;
+
+      switch (transaction.type) {
+        case 'deposit':
+          if (transaction.paymentMethod === 'dinheiro') {
+            balances.dinheiro += amount;
+          }
+          break;
+        case 'sale':
+          switch (transaction.paymentMethod) {
+            case 'dinheiro':
+              balances.dinheiro += amount;
+              break;
+            case 'cartao_credito':
+              balances.credito += amount;
+              break;
+            case 'cartao_debito':
+              balances.debito += amount;
+              break;
+            case 'pix':
+              balances.pix += amount;
+              break;
+          }
+          break;
+        case 'withdrawal':
+          balances.dinheiro -= amount;
+          break;
+      }
+    });
+
+    console.log('Saldos calculados:', balances);
+    return balances;
+  };
+
   useEffect(() => {
     if (open && cashData) {
-      setValues({
-        cash: formatCurrency(String(cashData.expectedBalance?.cash || 0)),
-        credit: formatCurrency(String(cashData.expectedBalance?.credit || 0)),
-        debit: formatCurrency(String(cashData.expectedBalance?.debit || 0)),
-        pix: formatCurrency(String(cashData.expectedBalance?.pix || 0))
-      });
-    } else {
-      setValues({
-        cash: '',
-        credit: '',
-        debit: '',
-        pix: ''
-      });
-      setObservation('');
-      setError('');
+      console.log('CashData recebido:', cashData);
+      
+      // Verifica se cashData é um array ou objeto único
+      const registerData = Array.isArray(cashData) ? cashData[0] : cashData.data;
+      
+      if (registerData) {
+        const expectedBalances = calculateExpectedBalances(
+          registerData.transactions,
+          registerData.initialAmount
+        );
+
+        setValues({
+          dinheiro: formatCurrency(expectedBalances.dinheiro || 0),
+          credito: formatCurrency(expectedBalances.credito || 0),
+          debito: formatCurrency(expectedBalances.debito || 0),
+          pix: formatCurrency(expectedBalances.pix || 0)
+        });
+      }
     }
   }, [open, cashData]);
 
   const formatCurrency = (value) => {
-    value = value.replace(/\D/g, '');
-    value = value.replace(/^0+/, '');
-    value = value.padStart(3, '0');
-    value = value.slice(0, -2) + ',' + value.slice(-2);
+    if (typeof value === 'number') {
+      return value.toFixed(2).replace('.', ',');
+    }
+
+    value = value.replace(/[^\d.,]/g, '');
+
+    const parts = value.split(/[.,]/);
+    if (parts.length > 2) {
+      value = parts[0] + ',' + parts[parts.length - 1];
+    }
+
+    const [intPart, decPart] = value.split(',');
+    if (decPart && decPart.length > 2) {
+      value = intPart + ',' + decPart.slice(0, 2);
+    }
+
     return value;
   };
 
   const handleValueChange = (method) => (event) => {
-    let value = event.target.value.replace(/\D/g, '');
-    
-    if (value) {
-      const formatted = formatCurrency(value);
-      setValues(prev => ({
-        ...prev,
-        [method]: formatted
-      }));
-    } else {
-      setValues(prev => ({
-        ...prev,
-        [method]: ''
-      }));
-    }
+    const formatted = formatCurrency(event.target.value);
+    setValues(prev => ({
+      ...prev,
+      [method]: formatted
+    }));
     setError('');
   };
 
@@ -92,37 +146,42 @@ const CashClosingModal = ({ open, onClose, onSubmit, loading, cashData }) => {
       <DialogTitle>Fechamento de Caixa</DialogTitle>
       <DialogContent>
         <Box sx={{ p: 2 }}>
-          {/* Resumo do Caixa */}
           <Typography variant="h6" gutterBottom>
             Resumo do Caixa
           </Typography>
           <Grid container spacing={2} sx={{ mb: 3 }}>
             <Grid item xs={12} sm={6}>
               <Typography variant="body2" color="text.secondary">
-                Valor Inicial: R$ {cashData?.initialAmount?.toFixed(2).replace('.', ',')}
+                Valor Inicial: R$ {(Array.isArray(cashData) ? cashData[0]?.initialAmount : cashData?.data?.initialAmount)?.toFixed(2).replace('.', ',')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Total Vendas: R$ {cashData?.totalSales?.toFixed(2).replace('.', ',')}
+                Total Vendas: R$ {calculateTotalSales(Array.isArray(cashData) ? cashData[0]?.transactions : cashData?.data?.transactions)?.toFixed(2).replace('.', ',')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Total Sangrias: R$ {cashData?.totalWithdrawals?.toFixed(2).replace('.', ',')}
+                Total Sangrias: R$ {calculateTotalWithdrawals(Array.isArray(cashData) ? cashData[0]?.transactions : cashData?.data?.transactions)?.toFixed(2).replace('.', ',')}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
               <Typography variant="body2" color="text.secondary">
                 Saldo Esperado por Método:
               </Typography>
-              {cashData?.expectedBalance && Object.entries(cashData.expectedBalance).map(([method, value]) => (
-                <Typography key={method} variant="body2" color="text.secondary">
-                  {method.charAt(0).toUpperCase() + method.slice(1)}: R$ {value.toFixed(2).replace('.', ',')}
-                </Typography>
-              ))}
+              {(() => {
+                const registerData = Array.isArray(cashData) ? cashData[0] : cashData?.data;
+                if (registerData) {
+                  const balances = calculateExpectedBalances(registerData.transactions, registerData.initialAmount);
+                  return Object.entries(balances).map(([method, value]) => (
+                    <Typography key={method} variant="body2" color="text.secondary">
+                      {method.charAt(0).toUpperCase() + method.slice(1)}: R$ {value.toFixed(2).replace('.', ',')}
+                    </Typography>
+                  ));
+                }
+                return null;
+              })()}
             </Grid>
           </Grid>
 
           <Divider sx={{ my: 2 }} />
 
-          {/* Campos de Entrada */}
           <Typography variant="h6" gutterBottom>
             Valores em Caixa
           </Typography>
@@ -182,6 +241,20 @@ const CashClosingModal = ({ open, onClose, onSubmit, loading, cashData }) => {
       </DialogActions>
     </Dialog>
   );
+};
+
+const calculateTotalSales = (transactions) => {
+  if (!transactions) return 0;
+  return transactions
+    .filter(t => t.type === 'sale')
+    .reduce((sum, t) => sum + (t.amount || 0), 0);
+};
+
+const calculateTotalWithdrawals = (transactions) => {
+  if (!transactions) return 0;
+  return transactions
+    .filter(t => t.type === 'withdrawal')
+    .reduce((sum, t) => sum + (t.amount || 0), 0);
 };
 
 export default CashClosingModal; 

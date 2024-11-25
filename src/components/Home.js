@@ -270,7 +270,23 @@ const Home = () => {
         });
     }, [carrinho]);
 
+    // Adicione esta função para verificar se pode adicionar produtos
+    const canAddProducts = useCallback(() => {
+        if (!isCashRegisterOpen) {
+            setSnackbar({
+                open: true,
+                message: 'É necessário abrir o caixa antes de realizar vendas',
+                severity: 'warning'
+            });
+            return false;
+        }
+        return true;
+    }, [isCashRegisterOpen]);
+
+    // Modifique a função adicionarAoCarrinho
     const adicionarAoCarrinho = useCallback(() => {
+        if (!canAddProducts()) return;
+
         if (produtoSelecionado) {
             let quantidadeNumerica = produtoSelecionado.unit === 'kg' 
                 ? parseFloat(quantidade.replace(',', '.')) 
@@ -293,7 +309,7 @@ const Home = () => {
                 produtoInputRef.current.focus();
             }
         }
-    }, [produtoSelecionado, quantidade, adicionarProdutoAoCarrinho]);
+    }, [produtoSelecionado, quantidade, adicionarProdutoAoCarrinho, canAddProducts]);
 
     const handleKeyDown = useCallback((e) => {
         if (e.key === 'Enter') {
@@ -482,6 +498,8 @@ const Home = () => {
 
     const handleBarcodeSubmit = (event) => {
         event.preventDefault();
+        if (!canAddProducts()) return;
+
         const produto = produtos.find(p => p.barcode === barcodeInput);
         if (produto) {
             adicionarProdutoAoCarrinho(produto, 1);
@@ -863,6 +881,45 @@ const Home = () => {
                             />
                         ))}
                     </Box>
+
+                    {/* Overlay apenas para a área de vendas */}
+                    {!isCashRegisterOpen && (
+                        <Box
+                            sx={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                bgcolor: 'rgba(0, 0, 0, 0.6)',
+                                zIndex: 1200,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 2,
+                                p: 3
+                            }}
+                        >
+                            <Typography variant="h5" color="white" align="center">
+                                Caixa Fechado
+                            </Typography>
+                            <Typography variant="body1" color="white" align="center">
+                                Para realizar vendas, é necessário abrir o caixa.
+                            </Typography>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={() => setShowCashRegisterModal(true)}
+                                sx={{ mt: 2 }}
+                            >
+                                Abrir Caixa
+                            </Button>
+                            <Typography variant="body2" color="white" align="center" sx={{ mt: 2, opacity: 0.8 }}>
+                                Você pode navegar para outras áreas do sistema usando o menu.
+                            </Typography>
+                        </Box>
+                    )}
                 </Box>
 
                 {/* Painel do Carrinho e Finalização */}
@@ -955,53 +1012,27 @@ const Home = () => {
                             Realizar Sangria
                         </Button>
                     </Box>
+
+                    {/* Overlay apenas para a área do carrinho */}
+                    {!isCashRegisterOpen && (
+                        <Box
+                            sx={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                bgcolor: 'rgba(0, 0, 0, 0.6)',
+                                zIndex: 1200
+                            }}
+                        />
+                    )}
                 </Box>
-
-                {/* PaymentProcessor */}
-                <PaymentProcessor
-                    open={showPaymentProcessor}
-                    onClose={() => setShowPaymentProcessor(false)}
-                    saleTotal={currentSaleData?.total || 0}
-                    saleId={currentSaleData?.id}
-                    onSuccess={handlePaymentSuccess}
-                    onError={handlePaymentError}
-                />
-
-                {/* Snackbar para mensagens */}
-                <Snackbar
-                    open={snackbar.open}
-                    autoHideDuration={3000}
-                    onClose={handleCloseSnackbar}
-                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-                >
-                    <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-                        {snackbar.message}
-                    </Alert>
-                </Snackbar>
-
-                {/* Adicione o botão de configurações */}
-                <IconButton
-                    onClick={() => setConfigOpen(true)}
-                    sx={{ position: 'absolute', top: 16, right: 16 }}
-                >
-                    <SettingsIcon />
-                </IconButton>
-
-                {/* Adicione o painel de configurações */}
-                <ConfigPanel
-                    open={configOpen}
-                    onClose={() => setConfigOpen(false)}
-                />
             </Box>
 
             <CashRegisterModal
                 open={showCashRegisterModal}
-                onClose={() => {
-                    if (!isCashRegisterOpen) {
-                        navigate('/');
-                    }
-                    setShowCashRegisterModal(false);
-                }}
+                onClose={() => setShowCashRegisterModal(false)}
                 onSubmit={handleOpenCashRegister}
                 loading={loadingCashRegister}
             />

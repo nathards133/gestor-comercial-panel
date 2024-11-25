@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import { startOfDay, startOfWeek, startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import {
     Box,
     Typography,
@@ -30,7 +28,10 @@ import {
     LinearProgress,
     Tooltip,
     Divider,
-    CardHeader
+    CardHeader,
+    Accordion,
+    AccordionSummary,
+    AccordionDetails
 } from '@mui/material';
 import WarningMessage from './WarningMessage';
 import PaymentNotificationList from './PaymentNotificationList';
@@ -40,6 +41,7 @@ import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { Receipt as ReceiptIcon } from '@mui/icons-material';
 import CashClosingModal from './CashClosingModal';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -192,7 +194,6 @@ const SalesPage = () => {
 
     const [cashRegisters, setCashRegisters] = useState([]);
     const [cashRegisterData, setCashRegisterData] = useState([]);
-    const [isCashRegisterOpen, setIsCashRegisterOpen] = useState(false);
     const [showClosingModal, setShowClosingModal] = useState(false);
     const [loadingClosing, setLoadingClosing] = useState(false);
     const [cashClosingData, setCashClosingData] = useState(null);
@@ -552,8 +553,30 @@ const SalesPage = () => {
         return { totalNetProfit, totalProfitMargin };
     }, [totalSalesValue, accountsStats.totalExpenses]);
 
+    const calculateTotalWithdrawals = (transactions) => {
+        if (!transactions) return 0;
+        return transactions
+            .filter(t => t.type === 'withdrawal')
+            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    };
+
+    // Função auxiliar para calcular totais
+    const calculateTotals = (transactions) => {
+        if (!transactions) return { totalSales: 0, totalWithdrawals: 0 };
+        
+        return transactions.reduce((acc, transaction) => {
+            if (transaction.type === 'sale') {
+                acc.totalSales += Number(transaction.amount) || 0;
+            } else if (transaction.type === 'withdrawal') {
+                acc.totalWithdrawals += Number(transaction.amount) || 0;
+            }
+            return acc;
+        }, { totalSales: 0, totalWithdrawals: 0 });
+    };
+
     const renderCashRegisterSummary = () => {
-        if (!cashRegisterData || !cashRegisterData.length) return null;
+        // Verifica se está na aba mensal e se existem dados
+        if (tabValue !== 2 || !cashRegisterData) return null;
 
         const formatDate = (date) => {
             return new Date(date).toLocaleDateString('pt-BR', {
@@ -565,151 +588,188 @@ const SalesPage = () => {
             });
         };
 
-        const getCardTitle = () => {
-            switch (tabValue) {
-                case 0:
-                    return 'Movimentações do Caixa (Hoje)';
-                case 1:
-                    return 'Movimentações do Caixa (Semana)';
-                case 2:
-                    return 'Movimentações do Caixa (Mês)';
-                default:
-                    return 'Movimentações do Caixa';
-            }
-        };
-
-        console.log('Status do caixa:', {
-            isCashRegisterOpen,
-            cashRegisterData
-        });
+        // Separa caixas abertos e fechados
+        const openRegister = cashRegisterData.find(register => register.status === 'open');
+        const closedRegisters = cashRegisterData.filter(register => register.status === 'closed');
 
         return (
-            <Card sx={{ mb: 3 }}>
-                <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                        {getCardTitle()}
-                    </Typography>
-                    <Grid container spacing={2}>
-                        {cashRegisterData.map((register, index) => {
-                            // Calcula o total de sangrias
-                            const withdrawals = register.transactions.filter(t => t.type === 'withdrawal');
-                            const totalWithdrawals = withdrawals.reduce((acc, curr) => acc + curr.amount, 0);
-                            
-                            // Calcula o total de vendas
-                            const sales = register.transactions.filter(t => t.type === 'sale');
-                            const totalSales = sales.reduce((acc, curr) => acc + curr.amount, 0);
+            <>
+                {/* Caixa Atual (Aberto) */}
+                {openRegister && (
+                    <Card sx={{ mb: 3 }}>
+                        <CardContent>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                <Typography variant="h6">
+                                    Caixa Atual (Aberto)
+                                </Typography>
+                                <Button
+                                    variant="contained"
+                                    color="secondary"
+                                    onClick={fetchClosingData}
+                                >
+                                    Fechar Caixa
+                                </Button>
+                            </Box>
 
-                            return (
-                                <Grid item xs={12} key={register._id}>
-                                    <Box sx={{ 
-                                        mb: 2,
-                                        p: 2,
-                                        border: '1px solid #e0e0e0',
-                                        borderRadius: 1,
-                                        bgcolor: register.status === 'open' ? '#e3f2fd' : '#fff'
-                                    }}>
-                                        <Typography variant="subtitle1" sx={{ fontWeight: 'medium', mb: 1 }}>
-                                            Caixa - {formatDate(register.openedAt)}
-                                            {register.closedAt && ` até ${formatDate(register.closedAt)}`}
-                                        </Typography>
-                                        
-                                        <Grid container spacing={2}>
-                                            <Grid item xs={12} sm={6}>
-                                                <Typography variant="body2" color="text.secondary">
-                                                    Valor Inicial
-                                                </Typography>
-                                                <Typography variant="h6">
-                                                    R$ {register.initialAmount.toFixed(2).replace('.', ',')}
-                                                </Typography>
-                                            </Grid>
-                                            
-                                            <Grid item xs={12} sm={6}>
-                                                <Typography variant="body2" color="text.secondary">
-                                                    {register.status === 'open' ? 'Valor Atual' : 'Valor Final'}
-                                                </Typography>
-                                                <Typography variant="h6">
-                                                    R$ {register.currentAmount.toFixed(2).replace('.', ',')}
-                                                </Typography>
-                                            </Grid>
-                                            
-                                            <Grid item xs={12} sm={6}>
-                                                <Typography variant="body2" color="text.secondary">
-                                                    Total em Vendas
-                                                </Typography>
-                                                <Typography variant="h6" color="success.main">
-                                                    R$ {totalSales.toFixed(2).replace('.', ',')}
-                                                </Typography>
-                                            </Grid>
-                                            
-                                            <Grid item xs={12} sm={6}>
-                                                <Typography variant="body2" color="text.secondary">
-                                                    Total em Sangrias
-                                                </Typography>
-                                                <Typography variant="h6" color="error.main">
-                                                    R$ {totalWithdrawals.toFixed(2).replace('.', ',')}
-                                                </Typography>
-                                            </Grid>
-                                        </Grid>
-
-                                        <Typography 
-                                            variant="body2" 
-                                            sx={{ 
-                                                mt: 2,
-                                                color: register.status === 'open' ? 'success.main' : 'text.secondary',
-                                                fontWeight: 'medium'
-                                            }}
-                                        >
-                                            Status: {register.status === 'open' ? 'Aberto' : 'Fechado'}
-                                        </Typography>
-                                    </Box>
-                                    {index < cashRegisterData.length - 1 && <Divider />}
+                            <Grid container spacing={2}>
+                                <Grid item xs={12} sm={4}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Valor Inicial
+                                    </Typography>
+                                    <Typography variant="h6">
+                                        R$ {openRegister.initialAmount.toFixed(2)}
+                                    </Typography>
                                 </Grid>
-                            );
-                        })}
-                    </Grid>
-                    <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                        <Button
-                            variant="contained"
-                            color="secondary"
-                            onClick={fetchClosingData}
-                            disabled={!isCashRegisterOpen}
-                        >
-                            Fechar Caixa
-                        </Button>
-                    </Box>
-                </CardContent>
-            </Card>
+                                <Grid item xs={12} sm={4}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Saldo Atual
+                                    </Typography>
+                                    <Typography variant="h6">
+                                        R$ {openRegister.currentAmount.toFixed(2)}
+                                    </Typography>
+
+                                   
+                                    
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Sangrias 
+                                    </Typography>
+                                    <Typography variant="h6" color="error.main">
+                                        R$ {calculateTotalWithdrawals(openRegister.transactions).toFixed(2)}
+                                    </Typography>
+                                </Grid>
+                                <Grid item xs={12} sm={4}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Aberto em
+                                    </Typography>
+                                    <Typography variant="body1">
+                                        {formatDate(openRegister.openedAt)}
+                                    </Typography>
+                                </Grid>
+                            </Grid>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Histórico de Caixas (Fechados) */}
+                {closedRegisters.length > 0 && (
+                    <Accordion sx={{ mb: 3 }}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Typography variant="h6">
+                                Histórico de Caixas ({closedRegisters.length})
+                            </Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                            <Grid container spacing={2}>
+                                {closedRegisters.map((register) => {
+                                    const totals = calculateTotals(register.transactions);
+                                    
+                                    return (
+                                        <Grid item xs={12} key={register._id}>
+                                            <Paper 
+                                                elevation={0}
+                                                sx={{ 
+                                                    p: 2, 
+                                                    border: 1, 
+                                                    borderColor: 'divider',
+                                                    mb: 2
+                                                }}
+                                            >
+                                                <Typography variant="subtitle1" gutterBottom>
+                                                    Período: {formatDate(register.openedAt)} - {formatDate(register.closedAt)}
+                                                </Typography>
+
+                                                <Grid container spacing={2}>
+                                                    {/* Valores Iniciais e Finais */}
+                                                    <Grid item xs={12} sm={6} md={3}>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Valor Inicial
+                                                        </Typography>
+                                                        <Typography variant="h6">
+                                                            R$ {register.initialAmount.toFixed(2)}
+                                                        </Typography>
+                                                    </Grid>
+                                                    <Grid item xs={12} sm={6} md={3}>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Valor Final
+                                                        </Typography>
+                                                        <Typography variant="h6">
+                                                            R$ {register.currentAmount.toFixed(2)}
+                                                        </Typography>
+                                                    </Grid>
+
+                                                    {/* Resumo por Método de Pagamento */}
+                                                    {register.finalAmounts && (
+                                                        <Grid item xs={12}>
+                                                            <Divider sx={{ my: 2 }} />
+                                                            <Typography variant="subtitle2" gutterBottom>
+                                                                Valores por Método de Pagamento
+                                                            </Typography>
+                                                            <Grid container spacing={2}>
+                                                                {Object.entries(register.finalAmounts).map(([method, value]) => (
+                                                                    <Grid item xs={6} sm={3} key={method}>
+                                                                        <Typography variant="body2" color="text.secondary">
+                                                                            {method.charAt(0).toUpperCase() + method.slice(1)}
+                                                                        </Typography>
+                                                                        <Typography variant="body1">
+                                                                            R$ {value.toFixed(2)}
+                                                                        </Typography>
+                                                                    </Grid>
+                                                                ))}
+                                                            </Grid>
+                                                        </Grid>
+                                                    )}
+
+                                                    {/* Resumo de Transações */}
+                                                    <Grid item xs={12}>
+                                                        <Divider sx={{ my: 2 }} />
+                                                        <Typography variant="subtitle2" gutterBottom>
+                                                            Resumo de Transações
+                                                        </Typography>
+                                                        <Grid container spacing={2}>
+                                                            <Grid item xs={6} sm={3}>
+                                                                <Typography variant="body2" color="text.secondary">
+                                                                    Total Vendas
+                                                                </Typography>
+                                                                <Typography variant="body1" color="success.main">
+                                                                    R$ {totals.totalSales.toFixed(2)}
+                                                                </Typography>
+                                                            </Grid>
+                                                            <Grid item xs={6} sm={3}>
+                                                                <Typography variant="body2" color="text.secondary">
+                                                                    Total Sangrias
+                                                                </Typography>
+                                                                <Typography variant="body1" color="error.main">
+                                                                    R$ {totals.totalWithdrawals.toFixed(2)}
+                                                                </Typography>
+                                                            </Grid>
+                                                        </Grid>
+                                                    </Grid>
+                                                </Grid>
+                                            </Paper>
+                                        </Grid>
+                                    );
+                                })}
+                            </Grid>
+                        </AccordionDetails>
+                    </Accordion>
+                )}
+            </>
         );
     };
 
     // Função para buscar dados do caixa
     const fetchCashRegisterData = useCallback(async () => {
         try {
-            const [statusResponse, dailyResponse] = await Promise.all([
-                axios.get(`${API_URL}/api/cash-register`),
-                axios.get(`${API_URL}/api/cash-register/daily`)
-            ]);
+            const response = await axios.get(`${API_URL}/api/cash-register`);
             
-            // Atualiza o estado do caixa atual
-            if (statusResponse.data.data) {
-                const isOpen = statusResponse.data.data.status === 'open';
-                setIsCashRegisterOpen(isOpen);
-                setCashRegisterData([statusResponse.data.data]);
-            } else {
-                setIsCashRegisterOpen(false);
-                setCashRegisterData([]);
+            if (response.data) {
+                setCashRegisterData(response.data.cashRegisterData || []);
             }
-
-            // Atualiza o histórico de caixas do dia
-            if (dailyResponse.data) {
-                setCashRegisters(dailyResponse.data);
-            }
-
         } catch (error) {
             console.error('Erro ao verificar status do caixa:', error);
-            setIsCashRegisterOpen(false);
             setCashRegisterData([]);
-            setCashRegisters([]);
             setSnackbar({
                 open: true,
                 message: 'Erro ao verificar status do caixa',
@@ -725,7 +785,7 @@ const SalesPage = () => {
         }
     }, [fetchCashRegisterData, isContentVisible]);
 
-    // Atualiza o useEffect existente para incluir a verificação do caixa
+    // Atualizar useEffect existente para incluir a verificação do caixa
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -744,7 +804,9 @@ const SalesPage = () => {
                     setCashRegisterData(salesResponse.data.financialSummary.cashRegisterData);
                 }
                 
-                setIsCashRegisterOpen(cashResponse.data.status === 'open');
+                if (cashResponse.data.cashRegisterData) {
+                    setCashRegisterData(cashResponse.data.cashRegisterData);
+                }
                 
             } catch (error) {
                 console.error('Erro ao carregar dados:', error);
@@ -762,25 +824,7 @@ const SalesPage = () => {
         try {
             const response = await axios.get(`${API_URL}/api/cash-register/closing-data`);
             if (response.data) {
-                // Processar os dados para o formato esperado pela modal
-                const cashData = {
-                    initialAmount: response.data.data.initialAmount,
-                    currentAmount: response.data.data.currentAmount,
-                    totalSales: response.data.data.transactions
-                        .filter(t => t.type === 'sale')
-                        .reduce((sum, t) => sum + t.amount, 0),
-                    totalWithdrawals: response.data.data.transactions
-                        .filter(t => t.type === 'withdrawal')
-                        .reduce((sum, t) => sum + t.amount, 0),
-                    expectedBalance: {
-                        cash: response.data.data.currentAmount, // ou ajuste conforme necessário
-                        credit: 0, // preencher com valores reais se disponíveis
-                        debit: 0,
-                        pix: 0
-                    }
-                };
-
-                setCashClosingData(cashData);
+                setCashClosingData(response.data);
                 setShowClosingModal(true);
             }
         } catch (error) {
@@ -803,7 +847,6 @@ const SalesPage = () => {
             });
             
             setShowClosingModal(false);
-            setIsCashRegisterOpen(false); // Atualiza o estado do caixa
             setCashRegisterData([]); // Limpa os dados do caixa atual
             
             // Busca todos os caixas do dia
@@ -848,7 +891,7 @@ const SalesPage = () => {
         return (
             <Box sx={{ mb: 3 }}>
                 {/* Caixa Atual */}
-                {isCashRegisterOpen && cashRegisterData.length > 0 && (
+                {cashRegisterData.some(register => register.status === 'open') && cashRegisterData.length > 0 && (
                     <Card sx={{ mb: 2 }}>
                         <CardHeader 
                             title="Caixa Atual" 
@@ -857,7 +900,7 @@ const SalesPage = () => {
                                     variant="contained"
                                     color="secondary"
                                     onClick={fetchClosingData}
-                                    disabled={!isCashRegisterOpen || cashRegisterData[0]?.status !== 'open'}
+                                    disabled={!cashRegisterData.some(register => register.status === 'open')}
                                 >
                                     Fechar Caixa
                                 </Button>

@@ -56,12 +56,20 @@ const CashRegisterModal = ({ open, onClose, onSubmit, loading }) => {
   };
 
   return (
-    <Dialog open={open} onClose={loading ? undefined : onClose} maxWidth="sm" fullWidth>
+    <Dialog 
+      open={open} 
+      onClose={loading ? undefined : onClose}
+      maxWidth="sm" 
+      fullWidth
+    >
       <DialogTitle>Abertura de Caixa</DialogTitle>
       <DialogContent>
         <Box sx={{ p: 2 }}>
           <Typography variant="body1" gutterBottom>
             Insira o valor inicial do caixa (fundo de caixa)
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Você pode fechar esta janela e abrir o caixa mais tarde.
           </Typography>
           <TextField
             fullWidth
@@ -84,7 +92,10 @@ const CashRegisterModal = ({ open, onClose, onSubmit, loading }) => {
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
+        <Button 
+          onClick={onClose}
+          disabled={loading}
+        >
           Cancelar
         </Button>
         <Button 
