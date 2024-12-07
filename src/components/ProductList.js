@@ -105,6 +105,13 @@ const ProductList = () => {
     const [expirationDate, setExpirationDate] = useState(null);
     const navigate = useNavigate();
     const [marginCalculatorOpen, setMarginCalculatorOpen] = useState(false);
+    const [filters, setFilters] = useState({
+        search: '',
+        unit: '',
+        sortBy: 'name',
+        sortOrder: 'asc'
+    });
+
     useEffect(() => {
         const savedFilters = JSON.parse(localStorage.getItem('productFilters')) || {};
         setSortBy(savedFilters.sortBy || 'name');
@@ -144,44 +151,41 @@ const ProductList = () => {
         };
     }, [isBarcodeReaderOpen]);
 
-    const fetchProducts = async (filters = appliedFilters) => {
+    const fetchProducts = async (page = 1) => {
         try {
-            const res = await axios.get(`${apiUrl}/api/products`, {
+            setLoading(true);
+            const token = localStorage.getItem('token');
+            
+            const response = await axios.get(`${apiUrl}/api/products`, {
+                headers: { Authorization: `Bearer ${token}` },
                 params: {
-                    ...filters,
-                    page: page + 1,
+                    page,
                     limit: rowsPerPage,
-                    search: searchTerm
+                    search: filters.search,
+                    filterUnit: filters.unit,
+                    sortBy: filters.sortBy,
+                    sortOrder: filters.sortOrder,
+                    showArchived: showArchived
                 }
             });
-            if (res.data && Array.isArray(res.data.products)) {
-                setProducts(res.data.products);
-                setPagination({
-                    currentPage: res.data.currentPage,
-                    totalPages: res.data.totalPages,
-                    totalItems: res.data.totalItems
-                });
 
-                // Verifica se não há produtos arquivados e redireciona para ativos
-                if (showArchived && res.data.products.length === 0) {
-                    setShowArchived(false);
-                    setSnackbar({
-                        open: true,
-                        message: 'Não há produtos arquivados. Mostrando produtos ativos.',
-                        severity: 'info'
-                    });
-                }
-            } else {
-                console.error('A resposta da API não contm um array de produtos:', res.data);
-                setProducts([]);
+            if (response.data) {
+                setProducts(response.data.products);
+                setPagination({
+                    currentPage: response.data.currentPage,
+                    totalPages: response.data.totalPages,
+                    totalItems: response.data.totalItems
+                });
             }
         } catch (error) {
-            if(error.response && error.response.status === 401)
-            {
-                navigate('/login');
-            }
             console.error('Erro ao buscar produtos:', error);
-            setProducts([]);
+            setSnackbar({
+                open: true,
+                message: 'Erro ao carregar produtos',
+                severity: 'error'
+            });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -588,90 +592,119 @@ const ProductList = () => {
         fetchProducts(clearedFilters);
     };
 
-    const renderFilterControls = () => (
-        <Accordion>
-            <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
-                aria-controls="filter-controls-content"
-                id="filter-controls-header"
-            >
-                <Typography>
-                    Filtros e Ordenação
-                    {isFiltersApplied && (
-                        <Chip
-                            size="small"
-                            label="Filtros aplicados"
-                            color="primary"
-                            style={{ marginLeft: 10 }}
-                        />
-                    )}
-                </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-                <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={6} md={3}>
-                        <FormControl fullWidth variant="outlined" size="small">
-                            <InputLabel>Ordenar por</InputLabel>
-                            <Select
-                                value={sortBy}
-                                onChange={handleSortChange}
-                                label="Ordenar por"
-                            >
-                                <MenuItem value="name">Nome</MenuItem>
-                                <MenuItem value="price">Preço</MenuItem>
-                                <MenuItem value="quantity">Quantidade</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <Button 
-                            onClick={handleSortOrderChange}
-                            fullWidth
-                            variant="outlined"
-                        >
-                            {sortOrder === 'asc' ? 'Crescente' : 'Decrescente'}
-                        </Button>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <FormControl fullWidth variant="outlined" size="small">
-                            <InputLabel>Filtrar por unidade</InputLabel>
-                            <Select
-                                value={filterUnit}
-                                onChange={handleFilterUnitChange}
-                                label="Filtrar por unidade"
-                            >
-                                <MenuItem value="">Todas</MenuItem>
-                                {getUnitOptions().map((unit) => (
-                                    <MenuItem key={unit} value={unit}>{unit}</MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            onClick={handleApplyFilters}
-                            startIcon={<FilterListIcon />}
-                            fullWidth
-                        >
-                            Aplicar Filtros
-                        </Button>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <Button
-                            variant="outlined"
-                            onClick={handleClearFilters}
-                            startIcon={<ClearIcon />}
-                            fullWidth
-                        >
-                            Limpar Filtros
-                        </Button>
-                    </Grid>
-                </Grid>
-            </AccordionDetails>
-        </Accordion>
-    );
+    // const renderFilterControls = () => (
+        // <Accordion>
+        //     <AccordionSummary
+        //         expandIcon={<ExpandMoreIcon />}
+        //         aria-controls="filter-controls-content"
+        //         id="filter-controls-header"
+        //     >
+        //         <Typography>
+        //             Filtros e Ordenação
+        //             {isFiltersApplied && (
+        //                 <Chip
+        //                     size="small"
+        //                     label="Filtros aplicados"
+        //                     color="primary"
+        //                     style={{ marginLeft: 10 }}
+        //                 />
+        //             )}
+        //         </Typography>
+        //     </AccordionSummary>
+        //     <AccordionDetails>
+        //         <Grid container spacing={2} alignItems="center">
+        //             <Grid item xs={12} sm={6} md={3}>
+        //                 <FormControl fullWidth variant="outlined" size="small">
+        //                     <InputLabel>Ordenar por</InputLabel>
+        //                     <Select
+        //                         value={sortBy}
+        //                         onChange={handleSortChange}
+        //                         label="Ordenar por"
+        //                     >
+        //                         <MenuItem value="name">Nome</MenuItem>
+        //                         <MenuItem value="price">Preço</MenuItem>
+        //                         <MenuItem value="quantity">Quantidade</MenuItem>
+        //                     </Select>
+        //                 </FormControl>
+        //             </Grid>
+        //             <Grid item xs={12} sm={6} md={3}>
+        //                 <Button 
+        //                     onClick={handleSortOrderChange}
+        //                     fullWidth
+        //                     variant="outlined"
+        //                 >
+        //                     {sortOrder === 'asc' ? 'Crescente' : 'Decrescente'}
+        //                 </Button>
+        //             </Grid>
+        //             <Grid item xs={12} sm={6} md={3}>
+        //                 <FormControl fullWidth variant="outlined" size="small">
+        //                     <InputLabel>Filtrar por unidade</InputLabel>
+        //                     <Select
+        //                         value={filterUnit}
+        //                         onChange={handleFilterUnitChange}
+        //                         label="Filtrar por unidade"
+        //                     >
+        //                         <MenuItem value="">Todas</MenuItem>
+        //                         {getUnitOptions().map((unit) => (
+        //                             <MenuItem key={unit} value={unit}>{unit}</MenuItem>
+        //                         ))}
+        //                     </Select>
+        //                 </FormControl>
+        //             </Grid>
+        //             <Grid item xs={12} sm={6} md={3}>
+        //                 <Button
+        //                     variant="contained"
+        //                     color="primary"
+        //                     onClick={handleApplyFilters}
+        //                     startIcon={<FilterListIcon />}
+        //                     fullWidth
+        //                 >
+        //                     Aplicar Filtros
+        //                 </Button>
+        //             </Grid>
+        //             <Grid item xs={12} sm={6} md={3}>
+        //                 <Button
+        //                     variant="outlined"
+        //                     onClick={handleClearFilters}
+        //                     startIcon={<ClearIcon />}
+        //                     fullWidth
+        //                 >
+        //                     Limpar Filtros
+        //                 </Button>
+        //             </Grid>
+        //         </Grid>
+        //     </AccordionDetails>
+        // </Accordion>
+    // );
+
+    const handleMarginCalculation = (calculatedValues) => {
+        setNewProduct(prev => ({
+            ...prev,
+            price: calculatedValues.price,
+            quantity: calculatedValues.quantity
+        }));
+    };
+
+    const handleAddProduct = () => {
+        setNewProduct({
+            name: '',
+            price: '',
+            quantity: '',
+            barcode: '',
+            unit: getDefaultUnit(user.businessType),
+            minStockLevel: 5,
+            expirationDate: null
+        });
+        setOpenDialog(true);
+    };
+
+    const handleArchivedToggle = () => {
+        setShowArchived(!showArchived);
+    };
+
+    useEffect(() => {
+        fetchProducts(1);
+    }, [filters, showArchived]);
 
     return (
         <Box sx={{ p: 2 }}>
@@ -718,7 +751,7 @@ const ProductList = () => {
                         <Button
                             variant="contained"
                             color="primary"
-                            onClick={handleOpenDialog}
+                            onClick={handleAddProduct}
                             fullWidth
                         >
                             Adicionar Produto
@@ -739,7 +772,7 @@ const ProductList = () => {
                 </Grid>
             </Box>
 
-            {renderFilterControls()}
+            {/* {renderFilterControls()} */}
 
             <Divider sx={{ my: 2 }} />
 
@@ -805,10 +838,7 @@ const ProductList = () => {
 
             <Dialog open={openDialog} onClose={handleCloseDialog} fullScreen={isMobile}>
                 <DialogTitle>
-                    <Typography variant="h6">Adicionar Novo Produto</Typography>
-                    <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-                        Preencha os dados do produto com atenção. Informações precisas ajudam no controle do seu estoque.
-                    </Typography>
+                    {editingProduct ? 'Editar Produto' : 'Novo Produto'}
                 </DialogTitle>
                 <DialogContent>
                     {renderBusinessTypeWarning()}
@@ -899,18 +929,13 @@ const ProductList = () => {
                         select
                         margin="dense"
                         name="unit"
-                        label="Unidade de Medida"
+                        label="Unidade"
                         fullWidth
                         value={newProduct.unit}
                         onChange={handleInputChange}
-                        error={!!errors.unit}
-                        helperText={errors.unit || `Selecione a unidade adequada para seu produto. ${
-                            user.businessType === 'Açougue' ? 'Para carnes, use kg.' :
-                            user.businessType === 'Padaria' ? 'Para pães e doces, use unidade ou kg.' :
-                            'Escolha a unidade que melhor representa como você vende o produto.'
-                        }`}
+                        required
                     >
-                        {getUnitOptions().map((option) => (
+                        {getUnitOptions(user.businessType).map((option) => (
                             <MenuItem key={option} value={option}>
                                 {option}
                             </MenuItem>
@@ -973,6 +998,7 @@ const ProductList = () => {
                     open={marginCalculatorOpen}
                     onClose={() => setMarginCalculatorOpen(false)}
                     product={newProduct}
+                    onCalculationApply={handleMarginCalculation}
                 />
             </Dialog>
 

@@ -1,14 +1,17 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const interceptor = axios.interceptors.request.use(
+    // Interceptor para requisições
+    const requestInterceptor = axios.interceptors.request.use(
       (config) => {
         const token = localStorage.getItem('token');
         if (token) {
@@ -21,10 +24,23 @@ export const AuthProvider = ({ children }) => {
       }
     );
 
+    // Interceptor para respostas
+    const responseInterceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.data?.tokenExpired) {
+          logout();
+          navigate('/login');
+        }
+        return Promise.reject(error);
+      }
+    );
+
     return () => {
-      axios.interceptors.request.eject(interceptor);
+      axios.interceptors.request.eject(requestInterceptor);
+      axios.interceptors.response.eject(responseInterceptor);
     };
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');

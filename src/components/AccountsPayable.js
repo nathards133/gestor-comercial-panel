@@ -5,13 +5,15 @@ import {
   TextField, Select, MenuItem, FormControl, InputLabel, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Paper, IconButton,
   useMediaQuery, useTheme, Switch, FormControlLabel, Tabs, Tab, Checkbox, Chip,
-  InputAdornment
+  InputAdornment, FormHelperText
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon, Payment as PaymentIcon, Search as SearchIcon } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { format, parse } from 'date-fns';
+import { format, parse, isValid } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { NumericFormat } from 'react-number-format';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -25,7 +27,15 @@ const AccountsPayable = () => {
   const [products, setProducts] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [currentAccount, setCurrentAccount] = useState({
-    type: '', supplier: '', product: '', quantity: '', totalValue: '', dueDate: null, dueDay: '', description: ''
+    type: '',
+    supplier: '',
+    product: '',
+    quantity: '',
+    totalValue: '',
+    dueDate: null,
+    dueDay: '',
+    description: '',
+    installments: []
   });
   const [isRecurring, setIsRecurring] = useState(false);
   const [tabValue, setTabValue] = useState(0);
@@ -40,15 +50,31 @@ const AccountsPayable = () => {
     totalPending: 0,
     totalPaid: 0
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [formErrors, setFormErrors] = useState({});
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
-    fetchAccounts();
-    fetchSuppliers();
-    fetchProducts();
-    fetchMonthlyStats();
+    const fetchInitialData = async () => {
+      setIsLoading(true);
+      try {
+        await Promise.all([
+          fetchSuppliers(),
+          fetchProducts(),
+          fetchAccounts()
+        ]);
+      } catch (error) {
+        console.error('Erro ao carregar dados iniciais:', error);
+        setError('Erro ao carregar dados. Por favor, tente novamente.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchInitialData();
   }, []);
 
   const fetchAccounts = async () => {
@@ -68,18 +94,22 @@ const AccountsPayable = () => {
   const fetchSuppliers = async () => {
     try {
       const response = await axios.get(`${API_URL}/api/suppliers`);
-      setSuppliers(response.data);
+      setSuppliers(response.data.suppliers || []);
     } catch (error) {
       console.error('Erro ao buscar fornecedores:', error);
+      setError('Erro ao carregar fornecedores');
+      setSuppliers([]);
     }
   };
 
   const fetchProducts = async () => {
     try {
       const response = await axios.get(`${API_URL}/api/products`);
-      setProducts(response.data.products);
+      setProducts(response.data.products || []);
     } catch (error) {
       console.error('Erro ao buscar produtos:', error);
+      setError('Erro ao carregar produtos');
+      setProducts([]);
     }
   };
 
@@ -93,6 +123,7 @@ const AccountsPayable = () => {
   };
 
   const formatCurrency = (value) => {
+    if (!value) return '';
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
@@ -141,36 +172,152 @@ const AccountsPayable = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setCurrentAccount(prev => ({ ...prev, [name]: value }));
+
+    if (name === 'totalValue' || name === 'quantity') {
+      const numValue = parseFloat(value);
+      if (isNaN(numValue) || numValue < 0) {
+        setFormErrors(prev => ({
+          ...prev,
+          [name]: `${name === 'totalValue' ? 'Valor' : 'Quantidade'} deve ser um número positivo`
+        }));
+        return;
+      }
+    }
+
+    if (name === 'dueDay') {
+      const day = parseInt(value);
+      if (isNaN(day) || day < 1 || day > 31) {
+        setFormErrors(prev => ({
+          ...prev,
+          dueDay: 'Dia deve estar entre 1 e 31'
+        }));
+        return;
+      }
+    }
+
+    if (name.includes('.')) {
+      const [parent, child] = name.split('.');
+      setCurrentAccount(prev => ({
+        ...prev,
+        [parent]: { ...prev[parent], [child]: value }
+      }));
+    } else {
+      setCurrentAccount(prev => ({ ...prev, [name]: value }));
+    }
+
+    setFormErrors(prev => ({ ...prev, [name]: null }));
   };
 
   const handleDateChange = (date) => {
+    if (date && isValid(date)) {
+      setCurrentAccount(prev => ({
+        ...prev,
+        dueDate: format(date, 'yyyy-MM-dd')
+      }));
+      setFormErrors(prev => ({ ...prev, dueDate: null }));
+    } else {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        dueDate: 'Data inválida' 
+      }));
+    }
+  };
+
+  const formatToCurrency = (value) => {
+    if (!value) return '';
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  };
+
+  const currencyToNumber = (currencyString) => {
+    if (!currencyString) return 0;
+    return Number(currencyString.replace(/[^\d,]/g, '').replace(',', '.'));
+  };
+
+  const handleValueChange = (values) => {
+    const { value } = values;
     setCurrentAccount(prev => ({
       ...prev,
-      dueDate: date ? format(date, 'dd/MM/yyyy') : ''
+      totalValue: value
     }));
+    
+    if (value && Number(value) > 0) {
+      setFormErrors(prev => ({ ...prev, totalValue: null }));
+    }
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    
+    // Validação básica dos campos obrigatórios
+    if (!currentAccount.type) {
+      errors.type = 'Tipo é obrigatório';
+    }
+
+    if (currentAccount.type === 'supplier') {
+      if (!currentAccount.supplier) {
+        errors.supplier = 'Fornecedor é obrigatório';
+      }
+      if (!currentAccount.product) {
+        errors.product = 'Produto é obrigatório';
+      }
+      if (!currentAccount.quantity || currentAccount.quantity <= 0) {
+        errors.quantity = 'Quantidade deve ser maior que zero';
+      }
+    }
+
+    if ((currentAccount.type === 'rent' || currentAccount.type === 'other') && !currentAccount.description) {
+      errors.description = 'Descrição é obrigatória';
+    }
+
+    const totalValue = currencyToNumber(currentAccount.totalValue);
+    if (!totalValue || totalValue <= 0) {
+      errors.totalValue = 'Valor total deve ser maior que zero';
+    }
+
+    if (isRecurring && (!currentAccount.dueDay || currentAccount.dueDay < 1 || currentAccount.dueDay > 31)) {
+      errors.dueDay = 'Dia de vencimento deve estar entre 1 e 31';
+    }
+
+    if (!isRecurring && !currentAccount.dueDate) {
+      errors.dueDate = 'Data de vencimento é obrigatória';
+    }
+
+    if (isInstallment && (!totalInstallments || totalInstallments < 2)) {
+      errors.totalInstallments = 'Número de parcelas deve ser maior que 1';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
     try {
-      const accountData = { 
-        ...currentAccount, 
-        isRecurring, 
-        isInstallment, 
-        totalInstallments: isInstallment ? totalInstallments : undefined,
-        dueDate: currentAccount.dueDate ? format(parse(currentAccount.dueDate, 'dd/MM/yyyy', new Date()), "yyyy-MM-dd'T'HH:mm:ss.SSSxxx") : null
+      const formData = {
+        ...currentAccount,
+        totalValue: currencyToNumber(currentAccount.totalValue)
       };
+
       if (currentAccount._id) {
-        await axios.put(`${API_URL}/api/accounts-payable/${currentAccount._id}?isRecurring=${isRecurring}`, accountData);
+        await axios.put(`${API_URL}/api/accounts-payable/${currentAccount._id}`, formData);
       } else {
-        await axios.post(`${API_URL}/api/accounts-payable`, accountData);
+        await axios.post(`${API_URL}/api/accounts-payable`, formData);
       }
+      
       setOpenDialog(false);
-      await fetchAccounts();
-      await fetchMonthlyStats();
-      setTabValue(isRecurring ? 1 : isInstallment ? 2 : 0);
+      fetchAccounts();
     } catch (error) {
       console.error('Erro ao salvar conta:', error);
+      setFormErrors(prev => ({
+        ...prev,
+        submit: 'Erro ao salvar conta. Por favor, tente novamente.'
+      }));
     }
   };
 
@@ -443,6 +590,24 @@ const AccountsPayable = () => {
     setSearchTerm(event.target.value);
   };
 
+  const resetForm = () => {
+    setCurrentAccount({
+      type: '',
+      supplier: '',
+      product: '',
+      quantity: '',
+      totalValue: '',
+      dueDate: null,
+      dueDay: '',
+      description: '',
+      installments: []
+    });
+    setFormErrors({});
+    setIsRecurring(false);
+    setIsInstallment(false);
+    setTotalInstallments(2);
+  };
+
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Box>
@@ -471,11 +636,7 @@ const AccountsPayable = () => {
             variant="contained"
             color="primary"
             onClick={() => {
-              setCurrentAccount({
-                type: '', supplier: '', product: '', quantity: '', totalValue: '', dueDate: null, dueDay: '', description: ''
-              });
-              setIsRecurring(false);
-              setIsInstallment(false);
+              resetForm();
               setOpenDialog(true);
             }}
             startIcon={<AddIcon />}
@@ -517,7 +678,7 @@ const AccountsPayable = () => {
               control={<Switch checked={isInstallment} onChange={(e) => setIsInstallment(e.target.checked)} />}
               label="Conta Parcelada"
             />
-            <FormControl fullWidth margin="normal">
+            <FormControl fullWidth margin="normal" error={!!formErrors.type}>
               <InputLabel>Tipo</InputLabel>
               <Select
                 name="type"
@@ -528,22 +689,37 @@ const AccountsPayable = () => {
                 <MenuItem value="rent">{getAccountTypeName('rent')}</MenuItem>
                 <MenuItem value="other">{getAccountTypeName('other')}</MenuItem>
               </Select>
+              {formErrors.type && <FormHelperText>{formErrors.type}</FormHelperText>}
             </FormControl>
+
             {currentAccount.type === 'supplier' && (
               <>
-                <FormControl fullWidth margin="normal">
+                <FormControl fullWidth margin="normal" error={!!formErrors.supplier}>
                   <InputLabel>Fornecedor</InputLabel>
                   <Select
                     name="supplier"
                     value={currentAccount.supplier}
                     onChange={handleInputChange}
+                    disabled={isLoading}
                   >
-                    {suppliers.map((supplier) => (
-                      <MenuItem key={supplier._id} value={supplier._id}>{supplier.name}</MenuItem>
-                    ))}
+                    {isLoading ? (
+                      <MenuItem disabled>Carregando fornecedores...</MenuItem>
+                    ) : error ? (
+                      <MenuItem disabled>Erro ao carregar fornecedores</MenuItem>
+                    ) : suppliers.length === 0 ? (
+                      <MenuItem disabled>Nenhum fornecedor cadastrado</MenuItem>
+                    ) : (
+                      suppliers.map((supplier) => (
+                        <MenuItem key={supplier._id} value={supplier._id}>
+                          {supplier.name}
+                        </MenuItem>
+                      ))
+                    )}
                   </Select>
+                  {formErrors.supplier && <FormHelperText>{formErrors.supplier}</FormHelperText>}
                 </FormControl>
-                <FormControl fullWidth margin="normal">
+
+                <FormControl fullWidth margin="normal" error={!!formErrors.product}>
                   <InputLabel>Produto</InputLabel>
                   <Select
                     name="product"
@@ -554,7 +730,9 @@ const AccountsPayable = () => {
                       <MenuItem key={product._id} value={product._id}>{product.name}</MenuItem>
                     ))}
                   </Select>
+                  {formErrors.product && <FormHelperText>{formErrors.product}</FormHelperText>}
                 </FormControl>
+
                 <TextField
                   fullWidth
                   margin="normal"
@@ -563,9 +741,12 @@ const AccountsPayable = () => {
                   type="number"
                   value={currentAccount.quantity}
                   onChange={handleInputChange}
+                  error={!!formErrors.quantity}
+                  helperText={formErrors.quantity}
                 />
               </>
             )}
+
             {(currentAccount.type === 'rent' || currentAccount.type === 'other') && (
               <TextField
                 fullWidth
@@ -574,17 +755,36 @@ const AccountsPayable = () => {
                 label="Descrição"
                 value={currentAccount.description}
                 onChange={handleInputChange}
+                error={!!formErrors.description}
+                helperText={formErrors.description}
+                required
               />
             )}
-            <TextField
+
+            <NumericFormat
               fullWidth
               margin="normal"
-              name="totalValue"
               label="Valor Total"
-              type="number"
               value={currentAccount.totalValue}
-              onChange={handleInputChange}
+              onValueChange={handleValueChange}
+              thousandSeparator="."
+              decimalSeparator=","
+              prefix="R$ "
+              decimalScale={2}
+              fixedDecimalScale
+              allowNegative={false}
+              customInput={TextField}
+              error={!!formErrors.totalValue}
+              helperText={formErrors.totalValue}
+              required
+              InputProps={{
+                inputProps: {
+                  min: 0,
+                  step: 0.01
+                }
+              }}
             />
+
             {isInstallment && (
               <TextField
                 fullWidth
@@ -595,8 +795,12 @@ const AccountsPayable = () => {
                 inputProps={{ min: 2 }}
                 value={totalInstallments}
                 onChange={(e) => setTotalInstallments(Number(e.target.value))}
+                error={!!formErrors.totalInstallments}
+                helperText={formErrors.totalInstallments}
+                required
               />
             )}
+
             {isRecurring ? (
               <TextField
                 fullWidth
@@ -607,14 +811,34 @@ const AccountsPayable = () => {
                 inputProps={{ min: 1, max: 31 }}
                 value={currentAccount.dueDay}
                 onChange={handleInputChange}
+                error={!!formErrors.dueDay}
+                helperText={formErrors.dueDay}
+                required
               />
             ) : (
               <DatePicker
                 label="Data de Vencimento"
-                value={currentAccount.dueDate ? parse(currentAccount.dueDate, 'dd/MM/yyyy', new Date()) : null}
+                value={currentAccount.dueDate ? new Date(currentAccount.dueDate) : null}
                 onChange={handleDateChange}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    margin="normal"
+                    error={!!formErrors.dueDate}
+                    helperText={formErrors.dueDate || 'DD/MM/AAAA'}
+                    required
+                    inputProps={{
+                      ...params.inputProps,
+                      placeholder: 'DD/MM/AAAA'
+                    }}
+                  />
+                )}
                 format="dd/MM/yyyy"
-                renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
+                mask="__/__/____"
+                locale={ptBR}
+                disableOpenPicker={false}
+                clearable
               />
             )}
           </DialogContent>

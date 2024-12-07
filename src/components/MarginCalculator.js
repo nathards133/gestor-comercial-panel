@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { NumericFormat } from 'react-number-format';
 import { ArrowForward as ArrowForwardIcon, Info as InfoIcon } from '@mui/icons-material';
+import PropTypes from 'prop-types';
 
 const MarginCalculator = ({ open, onClose, product, onCalculationApply }) => {
     const [totalCost, setTotalCost] = useState('');
@@ -74,7 +75,7 @@ const MarginCalculator = ({ open, onClose, product, onCalculationApply }) => {
     };
 
     const handleApplyCalculation = () => {
-        if (results) {
+        if (results && onCalculationApply) {
             onCalculationApply({
                 price: parseFloat(results.sellingPrice),
                 quantity: parseInt(quantity)
@@ -291,6 +292,17 @@ const MarginCalculator = ({ open, onClose, product, onCalculationApply }) => {
             </DialogActions>
         </Dialog>
     );
+};
+
+MarginCalculator.propTypes = {
+    open: PropTypes.bool.isRequired,
+    onClose: PropTypes.func.isRequired,
+    product: PropTypes.object,
+    onCalculationApply: PropTypes.func.isRequired
+};
+
+MarginCalculator.defaultProps = {
+    product: {}
 };
 
 export default MarginCalculator;

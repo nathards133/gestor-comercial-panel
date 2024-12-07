@@ -10,10 +10,16 @@ import {
     MenuItem,
     InputAdornment,
     IconButton,
-    CircularProgress
+    CircularProgress,
+    Box,
+    Typography
 } from '@mui/material';
 import { NumericFormat } from 'react-number-format';
 import { ArrowForward as ArrowForwardIcon } from '@mui/icons-material';
+import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { ptBR } from 'date-fns/locale';
+import { parse, format } from 'date-fns';
 
 const ProductEditDialog = ({ open, onClose, product, onProductUpdated, businessType, userId }) => {
     const [editedProduct, setEditedProduct] = useState({
@@ -22,7 +28,8 @@ const ProductEditDialog = ({ open, onClose, product, onProductUpdated, businessT
         quantity: '',
         unit: '',
         barcode: '',
-        expirationDate: '' 
+        minStockLevel: 5,
+        expirationDate: null
     });
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
@@ -38,10 +45,11 @@ const ProductEditDialog = ({ open, onClose, product, onProductUpdated, businessT
                 quantity: product.quantity || '',
                 unit: product.unit || getDefaultUnit(businessType),
                 barcode: product.barcode || '',
-                expirationDate: product.expirationDate || '' 
+                minStockLevel: product.minStockLevel || 5,
+                expirationDate: product.expirationDate ? new Date(product.expirationDate) : null
             });
         }
-    }, [product, businessType, userId]);
+    }, [product, businessType]);
 
     const getDefaultUnit = (businessType) => {
         switch (businessType) {
@@ -131,32 +139,29 @@ const ProductEditDialog = ({ open, onClose, product, onProductUpdated, businessT
             setLoading(true);
             try {
                 const updatedProduct = {
-                    _id: editedProduct._id,
-                    name: editedProduct.name,
+                    ...editedProduct,
                     price: parseFloat(editedProduct.price),
                     quantity: parseFloat(editedProduct.quantity),
-                    unit: editedProduct.unit,
-                    barcode: editedProduct.barcode
+                    expirationDate: editedProduct.expirationDate ? format(new Date(editedProduct.expirationDate), 'yyyy-MM-dd') : null
                 };
 
                 const token = localStorage.getItem('token');
-                const config = {
-                    headers: { Authorization: `Bearer ${token}` }
-                };
-
-                console.log('Enviando produto editado para a API:', updatedProduct);
-                const response = await axios.put(`${apiUrl}/api/products/${updatedProduct._id}`, updatedProduct, config);
+                const response = await axios.put(
+                    `${apiUrl}/api/products/${updatedProduct._id}`,
+                    updatedProduct,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
 
                 if (response.status === 200) {
-                    console.log('Produto atualizado com sucesso:', response.data);
                     onProductUpdated();
                     onClose();
-                } else {
-                    throw new Error('Falha ao atualizar o produto');
                 }
             } catch (error) {
                 console.error('Erro ao atualizar o produto:', error);
-                // Aqui você pode adicionar uma lógica para mostrar uma mensagem de erro ao usuário
+                setErrors(prev => ({
+                    ...prev,
+                    submit: 'Erro ao atualizar produto. Tente novamente.'
+                }));
             } finally {
                 setLoading(false);
             }
@@ -193,6 +198,13 @@ const ProductEditDialog = ({ open, onClose, product, onProductUpdated, businessT
                 input.focus();
             }
         }
+    };
+
+    const handleDateChange = (date) => {
+        setEditedProduct(prev => ({
+            ...prev,
+            expirationDate: date
+        }));
     };
 
     return (
@@ -260,32 +272,42 @@ const ProductEditDialog = ({ open, onClose, product, onProductUpdated, businessT
                 />
                 <TextField
                     margin="dense"
-                    name="expirationDate"
-                    label="Data de Validade"
-                    type="date"
+                    name="minStockLevel"
+                    label="Quantidade Mínima em Estoque"
+                    type="number"
                     fullWidth
-                    value={editedProduct.expirationDate}
+                    value={editedProduct.minStockLevel}
                     onChange={handleInputChange}
-                    error={!!errors.expirationDate}
-                    helperText={errors.expirationDate}
+                    helperText="Defina um valor mínimo para ser alertado quando o estoque estiver baixo"
                 />
-                <TextField
-                    select
-                    margin="dense"
-                    name="unit"
-                    label="Unidade"
-                    fullWidth
-                    value={editedProduct.unit}
-                    onChange={handleInputChange}
-                    error={!!errors.unit}
-                    helperText={errors.unit}
-                >
-                    {getUnitOptions().map((option) => (
-                        <MenuItem key={option} value={option}>
-                            {option}
-                        </MenuItem>
-                    ))}
-                </TextField>
+
+                <LocalizationProvider dateAdapter={AdapterDateFns} locale={ptBR}>
+                    <DatePicker
+                        label="Data de Validade"
+                        value={editedProduct.expirationDate}
+                        onChange={handleDateChange}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                fullWidth
+                                margin="normal"
+                                helperText="Importante para controle de produtos perecíveis"
+                            />
+                        )}
+                    />
+                </LocalizationProvider>
+
+                <Box sx={{ mt: 2, bgcolor: 'info.light', p: 2, borderRadius: 1 }}>
+                    <Typography variant="subtitle2" color="info.contrastText">
+                        💡 Dicas para um bom cadastro:
+                    </Typography>
+                    <ul>
+                        <li>Use nomes descritivos e completos</li>
+                        <li>Mantenha as quantidades sempre atualizadas</li>
+                        <li>Configure alertas de estoque mínimo</li>
+                        <li>Para produtos perecíveis, sempre inclua a data de validade</li>
+                    </ul>
+                </Box>
             </DialogContent>
             <DialogActions>
                 <Button onClick={onClose}>Cancelar</Button>

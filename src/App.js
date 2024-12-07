@@ -79,8 +79,8 @@ function App() {
     <ConfigProvider>
       <ThemeProvider theme={isDarkMode ? darkTheme : lightTheme}>
         <CssBaseline />
-        <AuthProvider>
-          <Router>
+        <Router>
+          <AuthProvider>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
@@ -108,8 +108,8 @@ function App() {
                 <Route path="certificate" element={<CertificateUpload />} />
               </Route>
             </Routes>
-          </Router>
-        </AuthProvider>
+          </AuthProvider>
+        </Router>
       </ThemeProvider>
     </ConfigProvider>
   );

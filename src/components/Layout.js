@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Box, 
   Drawer, 
@@ -47,6 +47,7 @@ import { Bubble } from "@typebot.io/react";
 import { Settings as SettingsIcon } from '@mui/icons-material';
 import { useConfig } from '../contexts/ConfigContext';
 import ConfigPanel from './ConfigPanel';
+import axios from 'axios';
 
 const menuItems = [
   { text: 'Caixa', icon: <PointOfSale />, path: '/' },
@@ -104,6 +105,8 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
   const location = useLocation();
   const [configOpen, setConfigOpen] = useState(false);
   const { nfeEnabled } = useConfig();
+  const [cashNotifications, setCashNotifications] = useState([]);
+  const apiUrl = process.env.REACT_APP_API_URL;
 
   useEffect(() => {
     setOpen(!isMobile);
@@ -142,6 +145,49 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
   const shouldShowBot = () => {
     const allowedPaths = ['/sales', '/products', '/suppliers'];
     return allowedPaths.some(path => location.pathname.startsWith(path));
+  };
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const response = await axios.get(`${apiUrl}/api/notifications`);
+      const unreadNotifications = response.data.filter(n => !n.read);
+      setCashNotifications(response.data);
+      setNotificationCount(unreadNotifications.length);
+    } catch (error) {
+      console.error('Erro ao buscar notificações:', error);
+    }
+  }, [apiUrl]);
+
+//   useEffect(() => {
+//     fetchNotifications();
+//     const interval = setInterval(fetchNotifications, 30000); // Atualiza a cada 30 segundos
+//     return () => clearInterval(interval);
+//   }, [fetchNotifications]);
+
+  const renderNotifications = () => {
+    const allNotifications = [...notifications, ...cashNotifications];
+    return (
+      <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+        {allNotifications.length > 0 ? (
+          allNotifications.map((notification, index) => (
+            <MenuItem key={index} onClick={handleCloseNotificationMenu}>
+              <Box>
+                <Typography variant="subtitle2" color="text.primary">
+                  {notification.message}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {new Date(notification.createdAt).toLocaleString()}
+                </Typography>
+              </Box>
+            </MenuItem>
+          ))
+        ) : (
+          <MenuItem>
+            <Typography variant="body2">Nenhuma notificação</Typography>
+          </MenuItem>
+        )}
+      </Box>
+    );
   };
 
   return (
@@ -197,7 +243,7 @@ const Layout = ({ toggleTheme, isDarkMode }) => {
               },
             }}
           >
-            <PaymentNotificationList notifications={notifications} />
+            {renderNotifications()}
           </Menu>
           <IconButton
             size="large"

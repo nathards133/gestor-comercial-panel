@@ -5,9 +5,10 @@ import {
   TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle,
   DialogContent, DialogActions, IconButton, Autocomplete, Chip, Tooltip, InputAdornment,
   useMediaQuery, useTheme, Card, CardContent, Grid, Divider, TablePagination,
-  FormControl, InputLabel, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails, CircularProgress, Alert
+  FormControl, InputLabel, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails, CircularProgress, Alert, Snackbar
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, WhatsApp as WhatsAppIcon, Search as SearchIcon, Add as AddIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
+import { NumericFormat } from 'react-number-format';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -35,6 +36,13 @@ const SupplierManagement = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [availableProducts, setAvailableProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -284,6 +292,106 @@ const SupplierManagement = () => {
     </Card>
   );
 
+  const fetchAvailableProducts = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/products`, {
+        params: {
+          showArchived: false,
+          limit: 100 // Ajuste conforme necessário
+        }
+      });
+      
+      if (response.data && response.data.products) {
+        setAvailableProducts(response.data.products);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar produtos:', error);
+      setError('Erro ao carregar produtos. Por favor, tente novamente.');
+    }
+  };
+
+  const formatCNPJ = (value) => {
+    if (!value) return '';
+    const cnpj = value.replace(/\D/g, '');
+    return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+  };
+
+  const validateCNPJ = (cnpj) => {
+    const cleanCNPJ = cnpj.replace(/\D/g, '');
+    if (cleanCNPJ.length !== 14) return false;
+    return true; // Adicione mais validações se necessário
+  };
+
+  const handleSaveSupplier = async () => {
+    try {
+      setLoading(true);
+      
+      // Validações
+      if (!currentSupplier.name?.trim()) {
+        setError('Nome é obrigatório');
+        return;
+      }
+      
+      if (!validateCNPJ(currentSupplier.cnpj)) {
+        setError('CNPJ inválido');
+        return;
+      }
+
+      const supplierData = {
+        ...currentSupplier,
+        cnpj: currentSupplier.cnpj.replace(/\D/g, ''),
+        suppliedProducts: currentSupplier.suppliedProducts.map(product => 
+          typeof product === 'object' ? product._id : product
+        )
+      };
+
+      if (currentSupplier._id) {
+        await axios.put(`${API_URL}/api/suppliers/${currentSupplier._id}`, supplierData);
+      } else {
+        await axios.post(`${API_URL}/api/suppliers`, supplierData);
+      }
+
+      setOpenDialog(false);
+      fetchSuppliers();
+      setSnackbar({
+        open: true,
+        message: `Fornecedor ${currentSupplier._id ? 'atualizado' : 'cadastrado'} com sucesso!`,
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Erro ao salvar fornecedor:', error);
+      setError(error.response?.data?.message || 'Erro ao salvar fornecedor');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAvailableProducts();
+  }, []);
+
+  const handleCloseSnackbar = (event, reason) =>{
+    if (reason === 'clickaway') {
+      return;
+    }
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
+  // Função atualizada para renderizar opções do Autocomplete
+  const renderOption = (props, option) => {
+    const { key, ...otherProps } = props; // Extrair key dos props
+    return (
+      <li key={option._id} {...otherProps}>
+        <Box>
+          <Typography variant="body1">{option.name}</Typography>
+          <Typography variant="caption" color="textSecondary">
+            {`Preço: R$ ${option.price.toFixed(2)} | Estoque: ${option.quantity} ${option.unit}`}
+          </Typography>
+        </Box>
+      </li>
+    );
+  };
+
   return (
     <Box sx={{ p: 2 }}>
       <Typography variant={isMobile ? "h5" : "h4"} gutterBottom align="center">
@@ -423,22 +531,45 @@ const SupplierManagement = () => {
           <Autocomplete
             multiple
             options={products}
-            getOptionLabel={(option) => option.name}
-            value={currentSupplier.suppliedProducts}
-            onChange={handleProductChange}
+            getOptionLabel={(option) => option.name || ''}
+            isOptionEqualToValue={(option, value) => option._id === value._id}
+            value={currentSupplier.suppliedProducts || []}
+            onChange={(_, newValue) => {
+              setCurrentSupplier(prev => ({
+                ...prev,
+                suppliedProducts: newValue
+              }));
+            }}
             renderInput={(params) => (
               <TextField
                 {...params}
-                variant="outlined"
                 label="Produtos Fornecidos"
-                placeholder="Selecione os produtos"
+                margin="normal"
+                fullWidth
+                error={!!error && (!currentSupplier.suppliedProducts || currentSupplier.suppliedProducts.length === 0)}
+                helperText={error && (!currentSupplier.suppliedProducts || currentSupplier.suppliedProducts.length === 0) ? 
+                  'Selecione pelo menos um produto' : ''}
               />
             )}
-            renderTags={(value, getTagProps) =>
-              value.map((option, index) => (
-                <Chip variant="outlined" label={option.name} {...getTagProps({ index })} />
-              ))
-            }
+            renderOption={renderOption}
+            loading={loading}
+            loadingText="Carregando produtos..."
+            noOptionsText="Nenhum produto encontrado"
+            slotProps={{
+              popper: {
+                modifiers: [
+                  {
+                    name: 'flip',
+                    enabled: true,
+                    options: {
+                      altBoundary: true,
+                      rootBoundary: 'document',
+                      padding: 8,
+                    },
+                  },
+                ],
+              },
+            }}
           />
           <TextField
             fullWidth
@@ -494,6 +625,21 @@ const SupplierManagement = () => {
           <Button onClick={handleSubmit} color="primary">Salvar</Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbar.severity} 
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
